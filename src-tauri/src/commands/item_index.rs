@@ -279,8 +279,7 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
         return Err("未找到 Unturned.exe，请确保路径正确并指向 Unturned 根目录。".to_string());
     }
 
-    let modules_dir = game_root.join("Modules");
-    let target_dir = modules_dir.join("UnturnedImages");
+    let target_dir = game_root.join("Modules");
 
     // 1. Get resource path for the zipped module
     let resource_path = app.path().resolve("resources/UnturnedImages.zip", tauri::path::BaseDirectory::Resource)
@@ -290,12 +289,13 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
         return Err("助手内未找到 UnturnedImages.zip 资源文件，请确保该文件已放置在 src-tauri/resources 目录下。".to_string());
     }
 
-    // 2. Extract ZIP to Modules/UnturnedImages
+    // 2. Extract ZIP to Modules
     let file = File::open(&resource_path).map_err(|e| format!("无法打开资源文件: {}", e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无效的 ZIP 文件: {}", e))?;
 
-    if target_dir.exists() {
-        let _ = fs::remove_dir_all(&target_dir);
+    let module_dir = target_dir.join("UnturnedImages");
+    if module_dir.exists() {
+        let _ = fs::remove_dir_all(&module_dir);
     }
     fs::create_dir_all(&target_dir).map_err(|e| format!("无法创建模块目录: {}", e))?;
 
@@ -321,7 +321,7 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
 
     // 3. Launch game with -NoBattlEye
     let mut child = std::process::Command::new(&unturned_exe)
-        .arg("-NoBattlEye")
+        .arg("-nobattleye")
         .spawn()
         .map_err(|e| format!("启动游戏失败: {}", e))?;
 
@@ -329,7 +329,26 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
     let _ = child.wait();
 
     // 5. Cleanup the temporary module
-    let _ = fs::remove_dir_all(&target_dir);
+    if module_dir.exists() {
+        let _ = fs::remove_dir_all(&module_dir);
+    }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_image_index_module(game_path: String) -> Result<(), String> {
+    let game_root = PathBuf::from(&game_path);
+    let module_dir = game_root.join("Modules").join("UnturnedImages");
+    if module_dir.exists() {
+        fs::remove_dir_all(&module_dir).map_err(|e| format!("删除失败: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn is_image_index_module_installed(game_path: String) -> Result<bool, String> {
+    let game_root = PathBuf::from(&game_path);
+    let module_dir = game_root.join("Modules").join("UnturnedImages");
+    Ok(module_dir.exists())
 }

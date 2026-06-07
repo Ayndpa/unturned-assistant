@@ -39,6 +39,8 @@ pub fn run() {
             verify_unturned_path,
             resolve_item_icon,
             index_game_images,
+            remove_image_index_module,
+            is_image_index_module_installed,
             fetch_html,
             install_localization_mod,
             uninstall_localization_mod,

@@ -200,6 +200,8 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [hasMissingIcons, setHasMissingIcons] = useState(false);
   const [isIndexingImages, setIsIndexingImages] = useState(false);
+  const [isRemovingModule, setIsRemovingModule] = useState(false);
+  const [isImageIndexModuleInstalled, setIsImageIndexModuleInstalled] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isTeachingPopoverOpen, setIsTeachingPopoverOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -253,6 +255,12 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       } catch (e) {
         console.error("Failed to parse extra paths", e);
       }
+    }
+
+    if (savedPath) {
+      invoke<boolean>("is_image_index_module_installed", { gamePath: savedPath })
+        .then(installed => setIsImageIndexModuleInstalled(installed))
+        .catch(err => console.error("Failed to check if module is installed", err));
     }
 
     invoke<UnturnedItem[]>("load_cached_index")
@@ -421,6 +429,32 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       setSyncError(err.toString() || "索引游戏图片失败，请确保 src-tauri/resources/UnturnedImages.zip 已准备好。");
     } finally {
       setIsIndexingImages(false);
+      if (path) {
+        invoke<boolean>("is_image_index_module_installed", { gamePath: path })
+          .then(installed => setIsImageIndexModuleInstalled(installed));
+      }
+    }
+  };
+
+  const handleRemoveImageIndexModuleClick = async () => {
+    const path = localStorage.getItem("unturned_game_path");
+    if (!path) {
+      setSyncError("游戏安装路径未配置，无法执行操作。");
+      return;
+    }
+    
+    setIsRemovingModule(true);
+    setSyncError(null);
+    try {
+      await invoke("remove_image_index_module", { gamePath: path });
+    } catch (err: any) {
+      setSyncError(err.toString() || "移除图片索引模组失败。");
+    } finally {
+      setIsRemovingModule(false);
+      if (path) {
+        invoke<boolean>("is_image_index_module_installed", { gamePath: path })
+          .then(installed => setIsImageIndexModuleInstalled(installed));
+      }
     }
   };
 
@@ -685,11 +719,14 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             syncError={syncError}
             hasMissingIcons={hasMissingIcons}
             isIndexingImages={isIndexingImages}
+            isRemovingModule={isRemovingModule}
+            isImageIndexModuleInstalled={isImageIndexModuleInstalled}
             onSync={handleSync}
             onAddExtraPath={handleAddExtraPath}
             onRemoveExtraPath={handleRemoveExtraPath}
             onNavigate={onNavigate}
             onIndexImages={handleIndexImagesClick}
+            onRemoveImageIndexModule={handleRemoveImageIndexModuleClick}
           />
         ) : (
           <ItemDetailPane

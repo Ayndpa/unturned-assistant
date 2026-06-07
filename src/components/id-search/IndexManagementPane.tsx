@@ -69,11 +69,14 @@ interface IndexManagementPaneProps {
   syncError: string | null;
   hasMissingIcons: boolean;
   isIndexingImages: boolean;
+  isRemovingModule: boolean;
+  isImageIndexModuleInstalled: boolean;
   onSync: () => void;
   onAddExtraPath: () => void;
   onRemoveExtraPath: (path: string) => void;
   onNavigate: (page: string) => void;
   onIndexImages: () => void;
+  onRemoveImageIndexModule: () => void;
 }
 
 export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
@@ -86,11 +89,14 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
   syncError,
   hasMissingIcons,
   isIndexingImages,
+  isRemovingModule,
+  isImageIndexModuleInstalled,
   onSync,
   onAddExtraPath,
   onRemoveExtraPath,
   onNavigate,
   onIndexImages,
+  onRemoveImageIndexModule,
 }) => {
   const styles = useStyles();
 
@@ -211,14 +217,61 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
               如果物品列表中存在无法显示图标的物品，可以使用此功能通过游戏生成缺失的预览图。
             </Text>
 
-            <Button
-              appearance="outline"
-              icon={isIndexingImages ? <Spinner size="tiny" /> : <ImageSearchRegular />}
-              onClick={onIndexImages}
-              disabled={isSyncing || isIndexingImages || !gamePath}
-            >
-              {isIndexingImages ? "正在索引中..." : "索引游戏图片"}
-            </Button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <Button
+                appearance="outline"
+                icon={isIndexingImages ? <Spinner size="tiny" /> : <ImageSearchRegular />}
+                onClick={onIndexImages}
+                disabled={isSyncing || isIndexingImages || isRemovingModule || !gamePath}
+                title={!gamePath ? "请先在系统设置中配置游戏安装路径" : undefined}
+                style={{
+                  width: "100%",
+                  opacity: (isSyncing || isIndexingImages || isRemovingModule || !gamePath) ? 0.4 : 1,
+                  cursor: (isSyncing || isIndexingImages || isRemovingModule || !gamePath) ? "not-allowed" : "pointer",
+                  transition: "opacity 0.2s ease",
+                }}
+              >
+                {isIndexingImages ? "正在索引中..." : "索引游戏图片"}
+              </Button>
+
+              {/* 移除模组按钮 + 禁用原因说明 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <Button
+                  appearance="subtle"
+                  icon={isRemovingModule ? <Spinner size="tiny" /> : <DismissRegular />}
+                  onClick={onRemoveImageIndexModule}
+                  disabled={isSyncing || isIndexingImages || isRemovingModule || !gamePath || !isImageIndexModuleInstalled}
+                  title={
+                    !gamePath
+                      ? "请先在系统设置中配置游戏安装路径"
+                      : !isImageIndexModuleInstalled
+                      ? "图片索引模组尚未安装，无需移除"
+                      : undefined
+                  }
+                  style={{
+                    width: "100%",
+                    opacity: (isSyncing || isIndexingImages || isRemovingModule || !gamePath || !isImageIndexModuleInstalled) ? 0.35 : 1,
+                    cursor: (isSyncing || isIndexingImages || isRemovingModule || !gamePath || !isImageIndexModuleInstalled) ? "not-allowed" : "pointer",
+                    transition: "opacity 0.2s ease",
+                    pointerEvents: "auto",
+                  }}
+                >
+                  {isRemovingModule ? "正在移除..." : "移除图片索引模组"}
+                </Button>
+                {!isImageIndexModuleInstalled && !isSyncing && !isIndexingImages && gamePath && (
+                  <Text
+                    size={100}
+                    style={{
+                      color: tokens.colorNeutralForeground4,
+                      paddingLeft: "4px",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    ℹ 模组未安装，执行图片索引后方可移除
+                  </Text>
+                )}
+              </div>
+            </div>
           </div>
         </Card>
       </div>
