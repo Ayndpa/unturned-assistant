@@ -138,8 +138,19 @@ pub async fn scan_unturned_directory(
         }
 
         let raw_type = parsed_properties.get("Type").cloned().unwrap_or_default();
+        let raw_type = raw_type.to_lowercase();
+
+        if raw_type == "spawn" {
+            return None;
+        }
+
         let mut category = map_type_to_category(&raw_type);
-        if parent_dir.to_string_lossy().contains("Vehicles") { category = Some("vehicles".to_string()); }
+        if category.is_none() {
+            let parent_path = parent_dir.to_string_lossy().to_lowercase();
+            if parent_path.contains("bundles\\vehicles") || parent_path.contains("bundles/vehicles") {
+                category = Some("vehicles".to_string());
+            }
+        }
         let category = category?;
 
         Some(UnturnedItem {
