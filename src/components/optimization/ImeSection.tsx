@@ -37,12 +37,12 @@ const useStyles = makeStyles({
   section: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("16px"),
+    ...shorthands.gap("12px"),
   },
   statusCard: {
     backgroundColor: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    ...shorthands.padding("20px"),
+    ...shorthands.padding("14px"),
     flexShrink: 0,
   },
   statusHeader: {
@@ -50,8 +50,8 @@ const useStyles = makeStyles({
     justifyContent: "space-between",
     alignItems: "center",
     flexWrap: "wrap",
-    ...shorthands.gap("12px"),
-    marginBottom: "8px",
+    ...shorthands.gap("10px"),
+    marginBottom: "6px",
   },
   statusIndicator: {
     display: "flex",
@@ -61,17 +61,8 @@ const useStyles = makeStyles({
   },
   statusTitle: {
     fontWeight: tokens.fontWeightSemibold,
-    fontSize: "16px",
+    fontSize: "15px",
     lineHeight: "1.4",
-  },
-  registryCode: {
-    backgroundColor: tokens.colorNeutralBackground3,
-    ...shorthands.padding("2px", "6px"),
-    borderRadius: tokens.borderRadiusMedium,
-    fontFamily: "monospace",
-    fontSize: "11px",
-    color: tokens.colorNeutralForeground3,
-    wordBreak: "break-all",
   },
   explainerCard: {
     backgroundColor: tokens.colorNeutralBackground1,
@@ -92,10 +83,15 @@ const useStyles = makeStyles({
     alignItems: "center",
     flexWrap: "wrap",
     ...shorthands.gap("12px"),
-    marginTop: "16px",
-    ...shorthands.padding("12px", "16px"),
-    ...shorthands.margin("16px", "-20px", "-20px", "-20px"),
-    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
+    marginTop: "0",
+    marginBottom: "8px",
+    borderTop: "none",
+  },
+  feedbackRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    marginBottom: "8px",
   },
 });
 
@@ -157,6 +153,7 @@ export const ImeSection: React.FC = () => {
   };
 
   const hasUnappliedChanges = compatibilityMode !== savedMode;
+  const hasFeedback = hasUnappliedChanges || !!success || !!error;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -199,48 +196,6 @@ export const ImeSection: React.FC = () => {
               />
             </div>
 
-            <div
-              style={{
-                color: tokens.colorNeutralForeground4,
-                fontSize: "12px",
-                marginBottom: "16px",
-                paddingLeft: "32px",
-              }}
-            >
-              策略注册表项:{" "}
-              <span className={styles.registryCode}>
-                HKCU\Software\Policies\Microsoft\InputMethod\Settings\CHS\ConfigureImeVersion
-              </span>{" "}
-              = <strong>{compatibilityMode ? "1" : "0"}</strong>
-            </div>
-
-            {hasUnappliedChanges && (
-              <MessageBar intent="warning" style={{ marginBottom: "12px" }}>
-                <MessageBarBody>
-                  <MessageBarTitle>设置已更新，但尚未完全生效</MessageBarTitle>
-                  注册表已修改，需要<strong>一键刷新输入法服务</strong>或<strong>注销/重启电脑</strong>后才会应用。
-                </MessageBarBody>
-              </MessageBar>
-            )}
-
-            {success && (
-              <MessageBar intent="success" style={{ marginBottom: "12px" }}>
-                <MessageBarBody>
-                  <MessageBarTitle>操作成功</MessageBarTitle>
-                  {success}
-                </MessageBarBody>
-              </MessageBar>
-            )}
-
-            {error && (
-              <MessageBar intent="error" style={{ marginBottom: "12px" }}>
-                <MessageBarBody>
-                  <MessageBarTitle>错误</MessageBarTitle>
-                  {error}
-                </MessageBarBody>
-              </MessageBar>
-            )}
-
             <div className={mergeClasses(styles.actionRow, "card-actions-area")}>
               <Button
                 appearance="primary"
@@ -254,6 +209,37 @@ export const ImeSection: React.FC = () => {
                 刷新状态
               </Button>
             </div>
+
+            {hasFeedback && (
+              <div className={styles.feedbackRow}>
+                {hasUnappliedChanges && (
+                  <MessageBar intent="warning">
+                    <MessageBarBody>
+                      <MessageBarTitle>设置已更新，但尚未完全生效</MessageBarTitle>
+                      注册表已修改，需要<strong>一键刷新输入法服务</strong>或<strong>注销/重启电脑</strong>后才会应用。
+                    </MessageBarBody>
+                  </MessageBar>
+                )}
+
+                {success && (
+                  <MessageBar intent="success">
+                    <MessageBarBody>
+                      <MessageBarTitle>操作成功</MessageBarTitle>
+                      {success}
+                    </MessageBarBody>
+                  </MessageBar>
+                )}
+
+                {error && (
+                  <MessageBar intent="error">
+                    <MessageBarBody>
+                      <MessageBarTitle>错误</MessageBarTitle>
+                      {error}
+                    </MessageBarBody>
+                  </MessageBar>
+                )}
+              </div>
+            )}
           </Card>
 
           <Card className={styles.explainerCard}>
