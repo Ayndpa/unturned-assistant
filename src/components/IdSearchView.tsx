@@ -15,6 +15,19 @@ import {
   MessageBarTitle,
   MessageBarBody,
   Spinner,
+  Dialog,
+  DialogTrigger,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogActions,
+  DialogContent,
+  TeachingPopover,
+  TeachingPopoverTrigger,
+  TeachingPopoverSurface,
+  TeachingPopoverHeader,
+  TeachingPopoverBody,
+  TeachingPopoverTitle,
 } from "@fluentui/react-components";
 import {
   SearchRegular,
@@ -185,8 +198,21 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
+  const [hasMissingIcons, setHasMissingIcons] = useState(false);
+  const [isIndexingImages, setIsIndexingImages] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isTeachingPopoverOpen, setIsTeachingPopoverOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const handleIconMissing = React.useCallback(() => {
+    if (!hasMissingIcons) {
+      setHasMissingIcons(true);
+      setIsTeachingPopoverOpen(true);
+    }
+  }, [hasMissingIcons]);
+
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedItem, setSelectedItem] = useState<UnturnedItem | null>(null);
   const [showCopyAlert, setShowCopyAlert] = useState(false);
@@ -372,6 +398,32 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleIndexImagesClick = () => {
+    const path = localStorage.getItem("unturned_game_path");
+    if (!path) {
+      setSyncError("游戏安装路径未配置，无法执行图片索引。");
+      return;
+    }
+    setIsConfirmDialogOpen(true);
+  };
+
+  const executeIndexImages = async () => {
+    setIsConfirmDialogOpen(false);
+    setIsIndexingImages(true);
+    setSyncError(null);
+
+    const path = localStorage.getItem("unturned_game_path");
+    try {
+      await invoke("index_game_images", { gamePath: path });
+      setRefreshKey(prev => prev + 1);
+      setHasMissingIcons(false);
+    } catch (err: any) {
+      setSyncError(err.toString() || "索引游戏图片失败，请确保 src-tauri/resources/UnturnedImages.zip 已准备好。");
+    } finally {
+      setIsIndexingImages(false);
+    }
+  };
+
   const handleAddExtraPath = async () => {
     try {
       const selected = await invoke<string | null>("pick_folder");
@@ -514,16 +566,38 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
               onChange={(_, data) => setInputValue(data.value)}
               style={{ flex: 1 }}
             />
-            <Button
-              icon={<ArrowSyncRegular />}
-              onClick={() => {
-                setSelectedItem(null);
-                if (!isLargeScreen) setIsRightPaneOpen(true);
+            
+            <TeachingPopover
+              open={isTeachingPopoverOpen}
+              onOpenChange={(_, data) => {
+                if (!data.open) {
+                  setIsTeachingPopoverOpen(false);
+                }
               }}
-              title="查看数据索引统计与管理"
             >
-              索引管理
-            </Button>
+              <TeachingPopoverTrigger>
+                <Button
+                  icon={<ArrowSyncRegular />}
+                  onClick={() => {
+                    setSelectedItem(null);
+                    setIsTeachingPopoverOpen(false);
+                    if (!isLargeScreen) setIsRightPaneOpen(true);
+                  }}
+                  title="查看数据索引统计与管理"
+                >
+                  索引管理
+                </Button>
+              </TeachingPopoverTrigger>
+              <TeachingPopoverSurface>
+                <TeachingPopoverHeader>功能提醒</TeachingPopoverHeader>
+                <TeachingPopoverBody>
+                  <TeachingPopoverTitle>发现缺失图标</TeachingPopoverTitle>
+                  <Text>
+                    检测到当前列表中存在无法显示图标的物品。您可以前往“索引管理”面板，通过启动游戏来生成缺失的图标。
+                  </Text>
+                </TeachingPopoverBody>
+              </TeachingPopoverSurface>
+            </TeachingPopover>
           </div>
           <TabList
             selectedValue={selectedCategory}
@@ -559,11 +633,13 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             filteredItems={filteredItems}
             selectedItem={selectedItem}
             gamePath={gamePath}
+            refreshKey={refreshKey}
             isLoading={isLoading}
             isSyncing={isSyncing}
             visibleCount={visibleCount}
             onSelectItem={onSelectItem}
             onLoadMore={() => setVisibleCount((prev) => Math.min(prev + 50, filteredItems.length))}
+            onIconMissing={handleIconMissing}
             resetDeps={[searchQuery, selectedCategory, items] as const}
           />
         )}
@@ -607,10 +683,13 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             isSyncing={isSyncing}
             indexingProgress={indexingProgress}
             syncError={syncError}
+            hasMissingIcons={hasMissingIcons}
+            isIndexingImages={isIndexingImages}
             onSync={handleSync}
             onAddExtraPath={handleAddExtraPath}
             onRemoveExtraPath={handleRemoveExtraPath}
             onNavigate={onNavigate}
+            onIndexImages={handleIndexImagesClick}
           />
         ) : (
           <ItemDetailPane
@@ -620,6 +699,26 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
           />
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={isConfirmDialogOpen} onOpenChange={(_, data) => setIsConfirmDialogOpen(data.open)}>
+        <DialogSurface backdrop={{ style: { zIndex: 20000 } }} style={{ zIndex: 20001, backgroundColor: tokens.colorNeutralBackground1 }}>
+          <DialogBody>
+            <DialogTitle>启动游戏确认</DialogTitle>
+            <DialogContent>
+              助手将启动 Unturned 游戏以自动扫描并生成物品图标。游戏将在索引完成后自动关闭。在此期间请勿手动关闭游戏，是否继续？
+            </DialogContent>
+            <DialogActions>
+              <DialogTrigger disableButtonEnhancement>
+                <Button appearance="secondary">取消</Button>
+              </DialogTrigger>
+              <Button appearance="primary" onClick={executeIndexImages}>
+                立即开始
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 };

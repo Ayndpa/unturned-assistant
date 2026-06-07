@@ -91,10 +91,12 @@ interface ItemCardProps {
   item: UnturnedItem;
   isSelected: boolean;
   gamePath?: string | null;
+  refreshKey?: number;
   onClick: (item: UnturnedItem) => void;
+  onIconMissing?: () => void;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, gamePath, onClick }) => {
+export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, gamePath, refreshKey, onClick, onIconMissing }) => {
   const styles = useStyles();
   const [iconUrl, setIconUrl] = useState<string | null>(null);
 
@@ -109,12 +111,14 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, gamePath, 
           setIconUrl(convertFileSrc(path));
         } else {
           setIconUrl(null);
+          onIconMissing?.();
         }
       }).catch(console.error);
     } else {
       setIconUrl(null);
     }
-  }, [gamePath, item.guid, item.category]);
+  }, [gamePath, item.guid, item.category, refreshKey]);
+
 
   const rColor = RARITY_COLORS[item.rarity];
 

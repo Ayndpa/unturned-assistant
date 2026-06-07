@@ -32,11 +32,13 @@ interface ItemGridProps {
   filteredItems: UnturnedItem[];
   selectedItem: UnturnedItem | null;
   gamePath?: string | null;
+  refreshKey?: number;
   isLoading: boolean;
   isSyncing: boolean;
   visibleCount: number;
   onSelectItem: (item: UnturnedItem) => void;
   onLoadMore: () => void;
+  onIconMissing?: () => void;
   /** Reset scroll + visible count when these change */
   resetDeps: readonly unknown[];
 }
@@ -46,11 +48,13 @@ export const ItemGrid: React.FC<ItemGridProps> = ({
   filteredItems,
   selectedItem,
   gamePath,
+  refreshKey,
   isLoading,
   isSyncing,
   visibleCount,
   onSelectItem,
   onLoadMore,
+  onIconMissing,
   resetDeps,
 }) => {
   const styles = useStyles();
@@ -123,7 +127,9 @@ export const ItemGrid: React.FC<ItemGridProps> = ({
           item={item}
           isSelected={selectedItem?.id === item.id && selectedItem?.category === item.category}
           gamePath={gamePath}
+          refreshKey={refreshKey}
           onClick={onSelectItem}
+          onIconMissing={onIconMissing}
         />
       ))}
     </div>

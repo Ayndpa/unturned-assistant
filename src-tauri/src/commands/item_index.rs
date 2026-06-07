@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -263,4 +263,73 @@ pub async fn verify_unturned_path(game_path: String) -> Result<String, String> {
     } else {
         Err("路径验证失败：未检测到 Bundles 文件夹，请确认是否为 Unturned 根目录。".to_string())
     }
+}
+
+/// Index game images by extracting the UnturnedImages module and launching the game.
+#[tauri::command]
+pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Result<(), String> {
+    let game_root = PathBuf::from(&game_path);
+    let unturned_exe = if cfg!(target_os = "windows") {
+        game_root.join("Unturned.exe")
+    } else {
+        return Err("当前功能仅支持 Windows。".to_string());
+    };
+
+    if !unturned_exe.exists() {
+        return Err("未找到 Unturned.exe，请确保路径正确并指向 Unturned 根目录。".to_string());
+    }
+
+    let modules_dir = game_root.join("Modules");
+    let target_dir = modules_dir.join("UnturnedImages");
+
+    // 1. Get resource path for the zipped module
+    let resource_path = app.path().resolve("resources/UnturnedImages.zip", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("无法定位资源文件 UnturnedImages.zip: {}", e))?;
+
+    if !resource_path.exists() {
+        return Err("助手内未找到 UnturnedImages.zip 资源文件，请确保该文件已放置在 src-tauri/resources 目录下。".to_string());
+    }
+
+    // 2. Extract ZIP to Modules/UnturnedImages
+    let file = File::open(&resource_path).map_err(|e| format!("无法打开资源文件: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无效的 ZIP 文件: {}", e))?;
+
+    if target_dir.exists() {
+        let _ = fs::remove_dir_all(&target_dir);
+    }
+    fs::create_dir_all(&target_dir).map_err(|e| format!("无法创建模块目录: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => target_dir.join(path),
+            None => continue,
+        };
+
+        if file.name().ends_with('/') {
+            fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                }
+            }
+            let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+        }
+    }
+
+    // 3. Launch game with -NoBattlEye
+    let mut child = std::process::Command::new(&unturned_exe)
+        .arg("-NoBattlEye")
+        .spawn()
+        .map_err(|e| format!("启动游戏失败: {}", e))?;
+
+    // 4. Wait for game process to exit
+    let _ = child.wait();
+
+    // 5. Cleanup the temporary module
+    let _ = fs::remove_dir_all(&target_dir);
+
+    Ok(())
 }

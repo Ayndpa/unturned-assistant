@@ -8,6 +8,7 @@ use tauri::{webview::Color, Manager};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
@@ -37,6 +38,7 @@ pub fn run() {
             load_cached_index,
             verify_unturned_path,
             resolve_item_icon,
+            index_game_images,
             fetch_html,
             install_localization_mod,
             uninstall_localization_mod,

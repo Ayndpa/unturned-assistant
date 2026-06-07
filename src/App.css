@@ -56,8 +56,7 @@ body {
 .fui-Input,
 .fui-Input__input,
 .fui-Button:not(.fui-Button--primary),
-.fui-MenuPopover,
-.fui-DialogSurface {
+.fui-MenuPopover {
   background-color: rgba(255, 255, 255, 0.05) !important;
   backdrop-filter: blur(4px);
 }

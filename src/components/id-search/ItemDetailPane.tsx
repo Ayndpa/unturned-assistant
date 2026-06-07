@@ -16,7 +16,6 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
-  SplitButton,
   Input,
 } from "@fluentui/react-components";
 import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular } from "@fluentui/react-icons";
@@ -313,8 +312,6 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
       </div>
     );
   }
-
-  const spawnCommand = `@give @p/${selectedItem.id}/1`;
 
   const bilingualNames = getBilingualNames(selectedItem.name);
 

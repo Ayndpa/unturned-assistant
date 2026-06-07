@@ -12,6 +12,7 @@ import {
   Title3,
   makeStyles,
   tokens,
+  Spinner,
 } from "@fluentui/react-components";
 import {
   ArrowSyncRegular,
@@ -19,7 +20,8 @@ import {
   BoxRegular,
   FolderAddRegular,
   DismissRegular,
-  FolderRegular
+  FolderRegular,
+  ImageSearchRegular
 } from "@fluentui/react-icons";
 import { CATEGORIES } from "../../utils/types";
 
@@ -65,10 +67,13 @@ interface IndexManagementPaneProps {
   isSyncing: boolean;
   indexingProgress: { current: number; total: number; message: string } | null;
   syncError: string | null;
+  hasMissingIcons: boolean;
+  isIndexingImages: boolean;
   onSync: () => void;
   onAddExtraPath: () => void;
   onRemoveExtraPath: (path: string) => void;
   onNavigate: (page: string) => void;
+  onIndexImages: () => void;
 }
 
 export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
@@ -79,10 +84,13 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
   isSyncing,
   indexingProgress,
   syncError,
+  hasMissingIcons,
+  isIndexingImages,
   onSync,
   onAddExtraPath,
   onRemoveExtraPath,
   onNavigate,
+  onIndexImages,
 }) => {
   const styles = useStyles();
 
@@ -100,6 +108,15 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
         </Caption1>
         <Title3>索引数据管理</Title3>
       </div>
+
+      {syncError && (
+        <MessageBar intent="error">
+          <MessageBarBody>
+            <MessageBarTitle>发生错误</MessageBarTitle>
+            {syncError}
+          </MessageBarBody>
+        </MessageBar>
+      )}
 
       <Divider />
 
@@ -169,6 +186,38 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
               disabled={isSyncing}
             >
               添加扫描目录
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      <Divider />
+
+      {/* Game Image Indexing Section */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div className={styles.sectionTitle}>
+          <ImageSearchRegular />
+          <Text>游戏图标索引</Text>
+        </div>
+        <Card
+          style={{
+            backgroundColor: "rgba(255, 255, 255, 0.03)",
+            padding: "12px",
+            border: `1px solid ${hasMissingIcons ? tokens.colorPaletteYellowBorder1 : tokens.colorNeutralStroke3}`,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              如果物品列表中存在无法显示图标的物品，可以使用此功能通过游戏生成缺失的预览图。
+            </Text>
+
+            <Button
+              appearance="outline"
+              icon={isIndexingImages ? <Spinner size="tiny" /> : <ImageSearchRegular />}
+              onClick={onIndexImages}
+              disabled={isSyncing || isIndexingImages || !gamePath}
+            >
+              {isIndexingImages ? "正在索引中..." : "索引游戏图片"}
             </Button>
           </div>
         </Card>
@@ -250,7 +299,7 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           appearance="primary"
           icon={<ArrowSyncRegular />}
           onClick={onSync}
-          disabled={isSyncing}
+          disabled={isSyncing || isIndexingImages}
           style={{ width: "100%" }}
         >
           {isSyncing ? "正在同步..." : "重新扫描并重建索引"}
@@ -264,15 +313,6 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           前往系统设置修改路径
         </Button>
       </div>
-
-      {syncError && (
-        <MessageBar intent="error" style={{ marginTop: "8px" }}>
-          <MessageBarBody>
-            <MessageBarTitle>重建索引失败</MessageBarTitle>
-            {syncError}
-          </MessageBarBody>
-        </MessageBar>
-      )}
     </div>
   );
 };
