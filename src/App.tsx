@@ -132,7 +132,7 @@ function App() {
       case "home":
         return <HomeView onNavigate={(page) => setActiveTab(page)} />;
       case "id-search":
-        return <IdSearchView />;
+        return <IdSearchView onNavigate={(page) => setActiveTab(page)} />;
       case "settings":
         return <SettingsView themeMode={themeMode} onChangeThemeMode={setThemeMode} />;
       case "crafting":

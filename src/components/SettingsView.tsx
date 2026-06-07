@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Title2,
   Title3,
@@ -13,7 +13,12 @@ import {
   tokens,
   RadioGroup,
   Radio,
-  Divider
+  Divider,
+  Spinner,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Text
 } from "@fluentui/react-components";
 import {
   SettingsRegular,
@@ -21,6 +26,7 @@ import {
   InfoRegular,
   ColorRegular
 } from "@fluentui/react-icons";
+import { invoke } from "@tauri-apps/api/core";
 
 const useStyles = makeStyles({
   container: {
@@ -60,6 +66,15 @@ const useStyles = makeStyles({
   metaLabel: {
     color: tokens.colorNeutralForeground4,
     fontWeight: "bold",
+  },
+  syncStatusContainer: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("12px"),
+    ...shorthands.padding("16px"),
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke3}`,
   }
 });
 
@@ -71,6 +86,51 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ themeMode, onChangeThemeMode }) => {
   const styles = useStyles();
   const [gamePath, setGamePath] = useState("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Unturned");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Load configuration state on mount
+  useEffect(() => {
+    const savedPath = localStorage.getItem("unturned_game_path");
+    if (savedPath) {
+      setGamePath(savedPath);
+    }
+  }, []);
+
+  // Automatic path verification with a 500ms debounce
+  useEffect(() => {
+    if (!gamePath) {
+      setVerificationResult(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsVerifying(true);
+      try {
+        const msg = await invoke<string>("verify_unturned_path", { gamePath });
+        setVerificationResult({ success: true, message: msg });
+      } catch (err: any) {
+        setVerificationResult({ success: false, message: err.toString() || "路径验证失败。" });
+      } finally {
+        setIsVerifying(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [gamePath]);
+
+  const handlePickFolder = async () => {
+    try {
+      const selected = await invoke<string | null>("pick_folder");
+      if (selected) {
+        setGamePath(selected);
+        localStorage.setItem("unturned_game_path", selected);
+        setVerificationResult(null);
+      }
+    } catch (err) {
+      console.error("Failed to pick folder:", err);
+    }
+  };
 
   return (
     <div className={styles.container}>
@@ -102,7 +162,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ themeMode, onChangeT
 
       <Divider />
 
-      {/* Game Paths */}
+      {/* Game Paths & Verification */}
       <div className={styles.section}>
         <Title3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <FolderRegular /> 游戏路径配置
@@ -113,16 +173,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ themeMode, onChangeT
             <Input
               id="game-path-input"
               value={gamePath}
-              onChange={(e) => setGamePath(e.target.value)}
+              onChange={(e) => {
+                setGamePath(e.target.value);
+                localStorage.setItem("unturned_game_path", e.target.value);
+                setVerificationResult(null);
+              }}
               style={{ flex: 1 }}
             />
-            <Button icon={<FolderRegular />} onClick={() => alert("此功能需要配置 Tauri 后台。当前为静态演示页面。")}>
+            <Button icon={<FolderRegular />} onClick={handlePickFolder}>
               浏览...
             </Button>
           </div>
           <Body1 style={{ color: tokens.colorNeutralForeground4, fontSize: "12px" }}>
-            配置路径后，未来版本将支持一键备份存档、导入MOD及快速启动游戏等功能。
+            配置正确的安装目录（包含 Bundles 文件夹）以开启物品/车辆ID自动索引功能。
           </Body1>
+        </div>
+
+        {/* Auto Verification Panel */}
+        <div className={styles.syncStatusContainer}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <Text weight="semibold">路径检测状态：</Text>
+            {isVerifying ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Spinner size="tiny" />
+                <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>正在检测路径...</Text>
+              </div>
+            ) : verificationResult ? (
+              <Text style={{ color: verificationResult.success ? tokens.colorPaletteGreenForeground1 : tokens.colorPaletteRedForeground1, fontWeight: "bold" }}>
+                {verificationResult.success ? "路径有效 (包含 Bundles)" : "路径无效 (未找到 Bundles)"}
+              </Text>
+            ) : (
+              <Text style={{ color: tokens.colorNeutralForeground4 }}>
+                请输入或选择安装路径
+              </Text>
+            )}
+          </div>
+
+          {verificationResult && (
+            <MessageBar intent={verificationResult.success ? "success" : "error"} style={{ marginTop: "8px" }}>
+              <MessageBarBody>
+                <MessageBarTitle>{verificationResult.success ? "路径有效" : "路径验证失败"}</MessageBarTitle>
+                {verificationResult.message}
+              </MessageBarBody>
+            </MessageBar>
+          )}
         </div>
       </div>
 
@@ -142,14 +236,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ themeMode, onChangeT
             这是一款专为生存联机游戏《Unturned》打造的高效辅助桌面客户端。致力于为玩家提供优质便捷的代码查询、合成查询与地图支持。
           </Body1>
           <div className={styles.metaGrid}>
-            <div className={styles.metaLabel}>技术栈：</div>
-            <div>Tauri v2 + Bun + React + TS + Microsoft Fluent UI</div>
+            <div className={styles.metaLabel}>主要依赖：</div>
+            <div>React, Tauri, Fluent UI</div>
 
-            <div className={styles.metaLabel}>构建框架：</div>
-            <div>Vite & Rust (Cargo)</div>
-
-            <div className={styles.metaLabel}>开源声明：</div>
-            <div>本项目目前处于静态模板开发阶段，界面遵循 Microsoft Fluent 设计指南。</div>
+            <div className={styles.metaLabel}>作者：</div>
+            <div>Ayndpa</div>
           </div>
         </Card>
       </div>
