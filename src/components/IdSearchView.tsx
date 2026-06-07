@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Input,
   Button,
@@ -61,16 +61,87 @@ const useStyles = makeStyles({
     width: "100%",
     boxSizing: "border-box",
     position: "relative",
+    minWidth: "0",
+    overflowX: "hidden",
   },
   leftPane: {
     display: "flex",
     flexDirection: "column",
-    flex: 1,
+    flex: "1 1 0",
+    minWidth: "0",
+    minHeight: "0",
     height: "100%",
     padding: "24px",
     boxSizing: "border-box",
     overflowY: "hidden",
     ...shorthands.gap("28px"),
+  },
+  rightPaneResizeHandle: {
+    width: "14px",
+    position: "absolute",
+    left: "-7px",
+    top: "0",
+    bottom: "0",
+    height: "100%",
+    insetBlock: "0",
+    background: "transparent",
+    borderRadius: "999px",
+    cursor: "col-resize",
+    zIndex: 10050,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition:
+      "transform 0.2s ease, opacity 0.2s ease, background 0.2s ease",
+    "&::before": {
+      content: "\"\"",
+      position: "absolute",
+      left: "50%",
+      transform: "translateX(-50%)",
+      width: "3px",
+      height: "34px",
+      borderRadius: "999px",
+      background: `linear-gradient(180deg, 
+        transparent,
+        ${tokens.colorNeutralForeground3},
+        ${tokens.colorNeutralForeground2},
+        ${tokens.colorNeutralForeground3},
+        transparent
+      )`,
+      opacity: 0.8,
+      transition: "transform 0.18s, opacity 0.18s",
+      pointerEvents: "none",
+    },
+    "&:hover": {
+      background: `linear-gradient(90deg, transparent 36%, ${tokens.colorNeutralForeground3}, transparent 64%)`,
+      transform: "translateX(1px)",
+      opacity: 1,
+      boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke1}`,
+      "&::before": {
+        transform: "translateX(-50%) scaleY(1.2)",
+        opacity: 0.98,
+      }
+    },
+    "&:active": {
+      transform: "translateX(1px)",
+      opacity: 0.98,
+      boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke1}, 0 0 0 2px ${tokens.colorNeutralBackground5}`,
+      "&::before": {
+        transform: "translateX(-50%) scaleY(1.3)",
+        opacity: 1,
+      }
+    },
+    "& span": { pointerEvents: "none" },
+    touchAction: "none",
+    userSelect: "none",
+  },
+  rightPaneResizeHandleGrip: {
+    width: "8px",
+    height: "12px",
+    borderRadius: "999px",
+    background: `linear-gradient(90deg, ${tokens.colorNeutralForeground4}, ${tokens.colorNeutralForeground2})`,
+    boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke1}, inset 0 0 0 1px ${tokens.colorNeutralStroke2}`,
+    opacity: 0.95,
   },
   pageHeader: {
     display: "flex",
@@ -81,6 +152,8 @@ const useStyles = makeStyles({
   },
   rightPane: {
     width: "360px",
+    position: "relative",
+    flexShrink: 0,
     borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: "rgba(255, 255, 255, 0.02)", // Very subtle overlay
     padding: "24px",
@@ -99,8 +172,6 @@ const useStyles = makeStyles({
       right: "0",
       top: "0",
       bottom: "0",
-      width: "100%",
-      maxWidth: "400px",
       backgroundColor: "var(--app-sidebar-tint-solid, rgba(240, 240, 240, 0.95))",
       backdropFilter: "blur(40px)",
       boxShadow: tokens.shadow16,
@@ -151,8 +222,40 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("12px"),
   },
+  searchTopRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    width: "100%",
+    alignItems: "flex-start",
+    gap: "8px",
+  },
+  categoryTabs: {
+    width: "100%",
+    minWidth: "0",
+    display: "flex",
+    flexWrap: "wrap",
+    overflow: "visible",
+    flexShrink: 0,
+    ...shorthands.gap("8px"),
+  },
+  categoryTab: {
+    minWidth: "0",
+    flexShrink: 0,
+    paddingLeft: "10px",
+    paddingRight: "10px",
+    whiteSpace: "normal",
+    textAlign: "left",
+  },
   searchInput: {
     width: "100%",
+  },
+  searchInputField: {
+    flex: "1 1 260px",
+    minWidth: "220px",
+  },
+  indexManagementButton: {
+    flex: "0 0 auto",
+    whiteSpace: "nowrap",
   },
   emptyState: {
     display: "flex",
@@ -190,6 +293,7 @@ interface IdSearchViewProps {
 
 export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const styles = useStyles();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [items, setItems] = useState<UnturnedItem[]>([]);
   const [gamePath, setGamePath] = useState<string | null>(null);
@@ -222,6 +326,26 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const [visibleCount, setVisibleCount] = useState(50);
   const [isRightPaneOpen, setIsRightPaneOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth > 1200);
+  const getRightPaneMaxWidth = (containerWidth?: number) => {
+    const viewportWidth = window.innerWidth;
+    const baseWidth = typeof containerWidth === "number" && containerWidth > 0 ? containerWidth : viewportWidth;
+
+    if (viewportWidth > 1200) {
+      return Math.max(120, baseWidth - 12);
+    }
+    return Math.max(120, Math.floor(baseWidth * 0.85));
+  };
+  const [rightPaneWidth, setRightPaneWidth] = useState(() => {
+    const savedWidth = window.localStorage?.getItem("idsearch_right_pane_width");
+    const parsed = savedWidth ? parseInt(savedWidth, 10) : NaN;
+    const minWidth = 120;
+    const fallback = 360;
+    const clampedDefault = Number.isFinite(parsed) ? parsed : fallback;
+    return Math.min(Math.max(minWidth, clampedDefault), getRightPaneMaxWidth());
+  });
+  const resizingRef = useRef(false);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(360);
 
   // Responsive listener
   useEffect(() => {
@@ -229,10 +353,60 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       const large = window.innerWidth > 1200;
       setIsLargeScreen(large);
       if (large) setIsRightPaneOpen(false);
+      const maxWidth = getRightPaneMaxWidth(containerRef.current?.clientWidth);
+      setRightPaneWidth((prevWidth) => Math.min(Math.max(120, prevWidth), maxWidth));
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("idsearch_right_pane_width", String(rightPaneWidth));
+  }, [rightPaneWidth]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!resizingRef.current) return;
+      const moveX = event.clientX;
+      const delta = moveX - resizeStartXRef.current;
+      const startWidth = resizeStartWidthRef.current;
+      const maxWidth = getRightPaneMaxWidth();
+      const nextWidth = Math.min(Math.max(120, startWidth - delta), maxWidth);
+      setRightPaneWidth(nextWidth);
+    };
+
+    const stopResize = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    };
+  }, []);
+
+  const handleRightPaneResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button === 2 || event.button === 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizingRef.current = true;
+    resizeStartXRef.current = event.clientX;
+    resizeStartWidthRef.current = rightPaneWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some environments do not support pointer capture for this element.
+    }
+  };
 
   // Automatically open right pane when an item is selected or management pane is shown (if not on large screen)
   useEffect(() => {
@@ -561,10 +735,28 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     }
   };
 
+  const effectiveRightPaneWidth = Math.min(
+    rightPaneWidth,
+    getRightPaneMaxWidth(containerRef.current?.clientWidth)
+  );
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      const maxWidth = getRightPaneMaxWidth(node.clientWidth);
+      setRightPaneWidth((prevWidth) => Math.min(Math.max(120, prevWidth), maxWidth));
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={containerRef}>
       {/* Toast Alert */}
       {showCopyAlert && (
         <div className={styles.messageBar}>
@@ -591,14 +783,13 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         </div>
 
         <div className={styles.searchBarContainer}>
-          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+          <div className={styles.searchTopRow}>
             <Input
-              className={styles.searchInput}
+              className={styles.searchInputField}
               contentBefore={<SearchRegular />}
               placeholder="搜索物品名称、ID 或描述..."
               value={inputValue}
               onChange={(_, data) => setInputValue(data.value)}
-              style={{ flex: 1 }}
             />
             
             <TeachingPopover
@@ -618,6 +809,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
                     if (!isLargeScreen) setIsRightPaneOpen(true);
                   }}
                   title="查看数据索引统计与管理"
+                  className={styles.indexManagementButton}
                 >
                   索引管理
                 </Button>
@@ -634,11 +826,12 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             </TeachingPopover>
           </div>
           <TabList
+            className={styles.categoryTabs}
             selectedValue={selectedCategory}
             onTabSelect={(_, data) => setSelectedCategory(data.value as string)}
           >
             {CATEGORIES.map((cat) => (
-              <Tab key={cat.key} value={cat.key}>
+              <Tab key={cat.key} value={cat.key} className={styles.categoryTab}>
                 {cat.label}
               </Tab>
             ))}
@@ -686,7 +879,26 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       />
 
       {/* Right details / management pane */}
-      <div className={`${styles.rightPane} ${isRightPaneOpen ? styles.rightPaneOpen : ""}`}>
+      <div
+        className={`${styles.rightPane} ${isRightPaneOpen ? styles.rightPaneOpen : ""}`}
+        style={{ width: `${effectiveRightPaneWidth}px` }}
+        onPointerDown={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (Math.abs(event.clientX - rect.left) <= 16) {
+            handleRightPaneResizeStart(event);
+          }
+        }}
+      >
+        <div
+          className={styles.rightPaneResizeHandle}
+          style={{
+            display: isLargeScreen || isRightPaneOpen ? "flex" : "none",
+          }}
+          onPointerDown={handleRightPaneResizeStart}
+          title="拖动调整详情栏宽度"
+        >
+          <span className={styles.rightPaneResizeHandleGrip} />
+        </div>
         {/* Mobile Close Button */}
         <div className={styles.closeButtonRow}>
           <Button

@@ -127,6 +127,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 }) => {
   const styles = useStyles();
   const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [recipeItemIcons, setRecipeItemIcons] = useState<Record<string, string | null>>({});
   const [commandTemplate, setCommandTemplate] = useState<string>(() => {
     return localStorage.getItem("unturned_command_template") || "/give <id>";
   });
@@ -179,6 +180,74 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
       setIconUrl(null);
     }
   }, [gamePath, selectedItem?.guid, selectedItem?.category]);
+
+  useEffect(() => {
+    setRecipeItemIcons({});
+  }, [selectedItem?.id]);
+
+  const recipeRelatedItemIds = useMemo(() => {
+    if (!selectedItem?.blueprints) return [] as string[];
+
+    const ids = new Set<string>();
+    selectedItem.blueprints.forEach((blueprint) => {
+      blueprint.inputs.forEach((input) => {
+        ids.add(input.idOrGuid);
+      });
+      blueprint.outputs.forEach((output) => {
+        ids.add(output.idOrGuid);
+      });
+    });
+
+    return Array.from(ids);
+  }, [selectedItem?.blueprints]);
+
+  useEffect(() => {
+    if (!gamePath || recipeRelatedItemIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    recipeRelatedItemIds.forEach((idOrGuid) => {
+      if (recipeItemIcons[idOrGuid] !== undefined) {
+        return;
+      }
+
+      const targetItem = resolveItem ? resolveItem(idOrGuid) : items.find((item) => item.id.toString() === idOrGuid);
+
+      if (!targetItem?.guid) {
+        setRecipeItemIcons((prev) => ({
+          ...prev,
+          [idOrGuid]: null,
+        }));
+        return;
+      }
+
+      invoke<string | null>("resolve_item_icon", {
+        gamePath,
+        guid: targetItem.guid,
+        isVehicle: targetItem.category === "vehicles",
+      })
+        .then((path) => {
+          if (cancelled) return;
+          setRecipeItemIcons((prev) => ({
+            ...prev,
+            [idOrGuid]: path ? convertFileSrc(path) : null,
+          }));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setRecipeItemIcons((prev) => ({
+            ...prev,
+            [idOrGuid]: null,
+          }));
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gamePath, items, recipeRelatedItemIds, recipeItemIcons, resolveItem]);
 
   // Find recipes where this item is used as an input
   const usages = useMemo(() => {
@@ -246,6 +315,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
     const { primary, secondary } = getBilingualNames(targetItem.name);
     const rColor = RARITY_COLORS[targetItem.rarity];
+    const iconSrc = recipeItemIcons[idOrGuid];
 
     return (
       <Button
@@ -268,6 +338,29 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           marginBottom: "6px",
         }}
       >
+        <div
+          style={{
+            width: "32px",
+            height: "32px",
+            flexShrink: 0,
+            backgroundColor: "rgba(255,255,255,0.06)",
+            borderRadius: "6px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+          }}
+        >
+          {iconSrc ? (
+            <img
+              src={iconSrc}
+              alt={primary}
+              style={{ width: "28px", height: "28px", objectFit: "contain" }}
+            />
+          ) : (
+            <span style={{ color: tokens.colorNeutralForeground4, fontSize: "10px" }}>?</span>
+          )}
+        </div>
         <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Text weight="semibold" style={{ fontSize: "13px" }}>
