@@ -18,13 +18,13 @@ import {
   PlayRegular,
   SettingsRegular,
   TranslateRegular,
-  KeyboardRegular
+  WrenchRegular
 } from "@fluentui/react-icons";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
 import { LocalizationView } from "./components/LocalizationView";
-import { ImeCompatibilityView } from "./components/ImeCompatibilityView";
+import { SystemOptimizationView } from "./components/SystemOptimizationView";
 import { TitleBar } from "./components/TitleBar";
 import "./App.css";
 
@@ -142,7 +142,7 @@ function App() {
       case "localization":
         return <LocalizationView />;
       case "ime-compatibility":
-        return <ImeCompatibilityView />;
+        return <SystemOptimizationView />;
       case "settings":
         return <SettingsView themeMode={themeMode} onChangeThemeMode={setThemeMode} />;
       case "crafting":
@@ -217,10 +217,10 @@ function App() {
                   </Tab>
                   <Tab 
                     value="ime-compatibility" 
-                    icon={<KeyboardRegular />}
+                    icon={<WrenchRegular />}
                     className={styles.tabItem}
                   >
-                    输入法兼容
+                    系统优化
                   </Tab>
                   <Tab 
                     value="settings" 

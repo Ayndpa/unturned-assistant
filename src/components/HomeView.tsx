@@ -16,7 +16,7 @@ import {
   PlayRegular, 
   BookOpenRegular,
   TranslateRegular,
-  KeyboardRegular
+  WrenchRegular
 } from "@fluentui/react-icons";
 
 const useStyles = makeStyles({
@@ -148,11 +148,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
           <CardHeader
             header={
               <div className={styles.cardTitle}>
-                <KeyboardRegular className={styles.cardIcon} />
-                <div>输入法兼容性</div>
+                <WrenchRegular className={styles.cardIcon} />
+                <div>系统优化</div>
               </div>
             }
-            description="一键开启微软拼音旧版兼容模式，彻底消除 Unturned 游戏中因中文输入导致的假死或冲突。"
+            description="一键开启微软拼音旧版兼容模式，并自动把虚拟内存调整到剩余空间最多的磁盘并固定为 8 GB，彻底消除游戏卡顿。"
           />
         </Card>
 
