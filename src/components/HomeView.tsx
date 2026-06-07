@@ -14,7 +14,8 @@ import {
   LibraryRegular, 
   SettingsRegular, 
   PlayRegular, 
-  BookOpenRegular 
+  BookOpenRegular,
+  TranslateRegular
 } from "@fluentui/react-icons";
 
 const useStyles = makeStyles({
@@ -127,6 +128,18 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
               </div>
             }
             description="收录游戏内武器、弹药、衣物、载具、医疗、建筑等数百项常用物品ID，一键复制给药/刷物指令。"
+          />
+        </Card>
+
+        <Card className={styles.card} onClick={() => onNavigate("localization")}>
+          <CardHeader
+            header={
+              <div className={styles.cardTitle}>
+                <TranslateRegular className={styles.cardIcon} />
+                <div>汉化补丁下载</div>
+              </div>
+            }
+            description="从 API 服务器实时获取可用的汉化补丁，一键下载并自动解压安装到本地 Unturned 目录。"
           />
         </Card>
 

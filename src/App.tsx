@@ -16,15 +16,19 @@ import {
   LibraryRegular,
   BookOpenRegular,
   PlayRegular,
-  SettingsRegular
+  SettingsRegular,
+  TranslateRegular
 } from "@fluentui/react-icons";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
+import { LocalizationView } from "./components/LocalizationView";
 import { TitleBar } from "./components/TitleBar";
 import "./App.css";
 
 const useStyles = makeStyles({
+// ... (omitting styles which are unchanged)
+
   rootContainer: {
     display: "flex",
     flexDirection: "column",
@@ -133,6 +137,8 @@ function App() {
         return <HomeView onNavigate={(page) => setActiveTab(page)} />;
       case "id-search":
         return <IdSearchView onNavigate={(page) => setActiveTab(page)} />;
+      case "localization":
+        return <LocalizationView />;
       case "settings":
         return <SettingsView themeMode={themeMode} onChangeThemeMode={setThemeMode} />;
       case "crafting":
@@ -197,6 +203,13 @@ function App() {
                     className={styles.tabItem}
                   >
                     地图雷达
+                  </Tab>
+                  <Tab 
+                    value="localization" 
+                    icon={<TranslateRegular />}
+                    className={styles.tabItem}
+                  >
+                    汉化补丁
                   </Tab>
                   <Tab 
                     value="settings" 
