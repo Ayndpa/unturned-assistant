@@ -1,5 +1,7 @@
 # Unturned Assistant
 
+QQ群：1057596686
+
 Unturned Assistant 是一款基于 [Tauri](https://tauri.app/) + [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) 构建的 Unturned 游戏辅助工具。
 
 本软件旨在为 Unturned 玩家提供更便捷的游戏体验，包括但不限于物品 ID 搜索、模组本地化管理、系统性能优化（如 IME 兼容性、分页文件设置）等实用功能。
