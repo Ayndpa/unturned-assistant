@@ -4,6 +4,7 @@ pub async fn check_ime_compatibility() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
         let output = Command::new("reg")
             .args(&[
                 "query",
@@ -11,6 +12,7 @@ pub async fn check_ime_compatibility() -> Result<bool, String> {
                 "/v",
                 "ConfigureImeVersion",
             ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
 
         match output {
@@ -38,6 +40,7 @@ pub async fn set_ime_compatibility(enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
 
         let args = if enabled {
             "Start-Process powershell -ArgumentList '-NoProfile -WindowStyle Hidden -Command & { \
@@ -53,6 +56,7 @@ pub async fn set_ime_compatibility(enabled: bool) -> Result<(), String> {
 
         let output = Command::new("powershell")
             .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", args])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
 
         match output {
@@ -80,18 +84,22 @@ pub async fn restart_ime() -> Result<(), String> {
     {
         use std::path::Path;
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
         use std::thread;
         use std::time::Duration;
 
         // 1. Kill IME-related processes to release file locks
         let _ = Command::new("taskkill")
             .args(&["/f", "/im", "TextInputHost.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
         let _ = Command::new("taskkill")
             .args(&["/f", "/im", "ChsIME.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
         let _ = Command::new("taskkill")
             .args(&["/f", "/im", "ctfmon.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
 
         thread::sleep(Duration::from_millis(500));
@@ -113,6 +121,7 @@ pub async fn restart_ime() -> Result<(), String> {
         // 3. Restart ctfmon.exe
         let output = Command::new("cmd")
             .args(&["/c", "start ctfmon.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
 
         match output {

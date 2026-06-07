@@ -6,6 +6,7 @@ pub async fn get_pagefile_status() -> Result<SystemPageFileStatus, String> {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
 
         // ── Disk info ────────────────────────────────────────────────────────
         let disk_output = Command::new("powershell")
@@ -18,6 +19,7 @@ pub async fn get_pagefile_status() -> Result<SystemPageFileStatus, String> {
                  | Select-Object DeviceID, FreeSpace, Size \
                  | ConvertTo-Json -Compress",
             ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|e| format!("无法查询磁盘信息: {}", e))?;
 
@@ -37,6 +39,7 @@ pub async fn get_pagefile_status() -> Result<SystemPageFileStatus, String> {
                    | ConvertTo-Json -Compress; \
                  Write-Output ($auto.ToString() + '|' + $files)",
             ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|e| format!("无法查询虚拟内存配置: {}", e))?;
 
@@ -129,6 +132,7 @@ pub async fn set_custom_pagefile() -> Result<(), String> {
     {
         use std::io::Write;
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
 
         let script_lines = [
             "$cs = Get-CimInstance Win32_ComputerSystem",
@@ -162,6 +166,7 @@ pub async fn set_custom_pagefile() -> Result<(), String> {
 
         let output = Command::new("powershell")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &cmd])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|e| format!("启动 PowerShell 失败: {}", e))?;
 
@@ -187,6 +192,7 @@ pub async fn set_automatic_pagefile() -> Result<(), String> {
     {
         use std::io::Write;
         use std::process::Command;
+        use std::os::windows::process::CommandExt;
 
         let script_lines = [
             "$cs = Get-CimInstance Win32_ComputerSystem",
@@ -212,6 +218,7 @@ pub async fn set_automatic_pagefile() -> Result<(), String> {
 
         let output = Command::new("powershell")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &cmd])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|e| format!("启动 PowerShell 失败: {}", e))?;
 
