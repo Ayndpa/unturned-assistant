@@ -17,12 +17,14 @@ import {
   BookOpenRegular,
   PlayRegular,
   SettingsRegular,
-  TranslateRegular
+  TranslateRegular,
+  KeyboardRegular
 } from "@fluentui/react-icons";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
 import { LocalizationView } from "./components/LocalizationView";
+import { ImeCompatibilityView } from "./components/ImeCompatibilityView";
 import { TitleBar } from "./components/TitleBar";
 import "./App.css";
 
@@ -139,6 +141,8 @@ function App() {
         return <IdSearchView onNavigate={(page) => setActiveTab(page)} />;
       case "localization":
         return <LocalizationView />;
+      case "ime-compatibility":
+        return <ImeCompatibilityView />;
       case "settings":
         return <SettingsView themeMode={themeMode} onChangeThemeMode={setThemeMode} />;
       case "crafting":
@@ -210,6 +214,13 @@ function App() {
                     className={styles.tabItem}
                   >
                     汉化补丁
+                  </Tab>
+                  <Tab 
+                    value="ime-compatibility" 
+                    icon={<KeyboardRegular />}
+                    className={styles.tabItem}
+                  >
+                    输入法兼容
                   </Tab>
                   <Tab 
                     value="settings" 

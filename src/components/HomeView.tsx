@@ -15,7 +15,8 @@ import {
   SettingsRegular, 
   PlayRegular, 
   BookOpenRegular,
-  TranslateRegular
+  TranslateRegular,
+  KeyboardRegular
 } from "@fluentui/react-icons";
 
 const useStyles = makeStyles({
@@ -140,6 +141,18 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
               </div>
             }
             description="从 API 服务器实时获取可用的汉化补丁，一键下载并自动解压安装到本地 Unturned 目录。"
+          />
+        </Card>
+
+        <Card className={styles.card} onClick={() => onNavigate("ime-compatibility")}>
+          <CardHeader
+            header={
+              <div className={styles.cardTitle}>
+                <KeyboardRegular className={styles.cardIcon} />
+                <div>输入法兼容性</div>
+              </div>
+            }
+            description="一键开启微软拼音旧版兼容模式，彻底消除 Unturned 游戏中因中文输入导致的假死或冲突。"
           />
         </Card>
 
