@@ -318,7 +318,11 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
           </TabList>
         </div>
 
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div className={styles.emptyState} style={{ gap: "16px", padding: "32px", boxSizing: "border-box" }}>
+            <Spinner size="huge" label="正在读取本地缓存索引..." labelPosition="below" />
+          </div>
+        ) : items.length === 0 ? (
           renderEmptyLeftPane()
         ) : (
           <ItemGrid
