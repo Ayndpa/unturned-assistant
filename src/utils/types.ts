@@ -17,7 +17,7 @@ export interface UnturnedItem {
   id: number;
   guid?: string;
   name: string;
-  category: 'weapons' | 'ammo' | 'apparel' | 'vehicles' | 'medical' | 'structures' | 'other';
+  category: 'weapons' | 'ammo' | 'apparel' | 'vehicles' | 'medical' | 'structures' | 'resources';
   description: string;
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary' | 'Mythical';
   blueprints?: Blueprint[];
@@ -31,6 +31,7 @@ export const CATEGORIES = [
   { key: 'vehicles', label: '载具' },
   { key: 'medical', label: '医疗/食物' },
   { key: 'structures', label: '建筑/防具' },
+  { key: 'resources', label: '材料/工具' },
 ];
 
 export const RARITY_COLORS: Record<UnturnedItem['rarity'], { color: string; bg: string }> = {

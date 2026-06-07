@@ -3,21 +3,26 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use crate::models::{UnturnedItem, Blueprint, BlueprintItem};
+use crate::models::{Blueprint, BlueprintItem};
 
 /// Map Unturned DAT type strings to frontend category names.
-pub fn map_type_to_category(item_type: &str) -> String {
+pub fn map_type_to_category(item_type: &str) -> Option<String> {
     let t = item_type.to_lowercase();
     match t.as_str() {
-        "gun" | "melee" | "throwable" => "weapons".to_string(),
-        "magazine" | "sight" | "tactical" | "grip" | "barrel" => "ammo".to_string(),
+        "gun" | "melee" | "throwable" | "charge" => Some("weapons".to_string()),
+        "magazine" | "sight" | "optics" | "tactical" | "grip" | "barrel" => Some("ammo".to_string()),
         "hat" | "mask" | "glasses" | "shirt" | "pants" | "vest" | "backpack" => {
-            "apparel".to_string()
+            Some("apparel".to_string())
         }
-        "vehicle" => "vehicles".to_string(),
-        "medical" | "food" | "water" => "medical".to_string(),
-        "structure" | "barricade" | "storage" | "sentry" => "structures".to_string(),
-        _ => "other".to_string(),
+        "vehicle" => Some("vehicles".to_string()),
+        "medical" | "food" | "water" => Some("medical".to_string()),
+        "structure" | "barricade" | "storage" | "sentry" | "generator" | "tank" | "trap" | "beacon" => {
+            Some("structures".to_string())
+        }
+        "supply" | "tool" | "fuel" | "filter" | "key" | "box" | "map" | "compass" => {
+            Some("resources".to_string())
+        }
+        _ => None,
     }
 }
 
@@ -57,6 +62,7 @@ pub fn load_specific_translation(dir: &Path, lang: &str) -> (String, String) {
     if lang == "Chinese" {
         files_to_try.push("Simplified_Chinese.dat".to_string());
         files_to_try.push("Schinese.dat".to_string());
+        files_to_try.push("SChinese.dat".to_string());
     }
 
     for filename in files_to_try {
@@ -84,21 +90,14 @@ pub fn load_item_name_and_desc(
     bundles_root: &Path,
     preferred_lang: &str,
     mod_path: Option<&Path>,
-) -> (String, String) {
+) -> Option<(String, String)> {
     // 1. English as base
-    let (mut eng_name, eng_desc) = load_specific_translation(dir, "English");
-    if eng_name.is_empty() {
-        eng_name = dir
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Unknown")
-            .to_string();
-    }
+    let (eng_name, eng_desc) = load_specific_translation(dir, "English");
+
+    let mut chi_name = String::new();
+    let mut chi_desc = String::new();
 
     if preferred_lang == "Chinese" {
-        let mut chi_name = String::new();
-        let mut chi_desc = String::new();
-
         // 2a. Try ChineseLocalMod override
         if let Some(mod_root) = mod_path {
             if let Ok(rel_path) =
@@ -106,7 +105,7 @@ pub fn load_item_name_and_desc(
             {
                 let mod_dir = mod_root.join(rel_path);
                 let translation_files =
-                    vec!["Schinese.dat", "Simplified_Chinese.dat", "Chinese.dat"];
+                    vec!["Schinese.dat", "SChinese.dat", "Simplified_Chinese.dat", "Chinese.dat"];
                 for filename in translation_files {
                     let lang_path = mod_dir.join(filename);
                     if lang_path.exists() {
@@ -134,131 +133,24 @@ pub fn load_item_name_and_desc(
                 chi_desc = local_chi_desc;
             }
         }
-
-        // 3. Combine or return
-        if !chi_name.is_empty() && chi_name.to_lowercase() != eng_name.to_lowercase() {
-            let combined_name = format!("{} ({})", eng_name, chi_name);
-            let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
-            return (combined_name, desc);
-        } else if !chi_name.is_empty() {
-            let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
-            return (chi_name, desc);
-        }
     }
 
-    (eng_name, eng_desc)
-}
-
-/// Recursively scan an Unturned directory tree and return all recognised items.
-pub fn scan_directory(
-    base_path: &Path,
-    bundles_root: &Path,
-    preferred_lang: &str,
-    mod_path: Option<&Path>,
-) -> Vec<UnturnedItem> {
-    let mut items = Vec::new();
-
-    fn walk_dir(
-        dir: &Path,
-        bundles_root: &Path,
-        preferred_lang: &str,
-        mod_path: Option<&Path>,
-        items: &mut Vec<UnturnedItem>,
-    ) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            let mut dat_files = Vec::new();
-
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        walk_dir(&path, bundles_root, preferred_lang, mod_path, items);
-                    } else if path.is_file() {
-                        if let Some(ext) = path.extension() {
-                            if ext == "dat" {
-                                dat_files.push(path);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !dat_files.is_empty() {
-                // Find the main property .dat (not a translation file)
-                let translations = [
-                    "english",
-                    "chinese",
-                    "simplified_chinese",
-                    "schinese",
-                    "german",
-                    "spanish",
-                    "french",
-                    "russian",
-                ];
-                let main_dat = dat_files.iter().find(|p| {
-                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                        let stem_lower = stem.to_lowercase();
-                        !translations.contains(&stem_lower.as_str())
-                    } else {
-                        false
-                    }
-                });
-
-                if let Some(main_dat_path) = main_dat {
-                    let (guid, mut blueprints, parsed_properties) = parse_dat_file_with_blueprints(main_dat_path);
-                    if let Some(id_str) = parsed_properties.get("ID") {
-                        if let Ok(id) = id_str.trim().parse::<u32>() {
-                            // Resolve "this" in blueprints
-                            for bp in &mut blueprints {
-                                for input in &mut bp.inputs {
-                                    if input.id_or_guid.to_lowercase() == "this" {
-                                        input.id_or_guid = id.to_string();
-                                    }
-                                }
-                                for output in &mut bp.outputs {
-                                    if output.id_or_guid.to_lowercase() == "this" {
-                                        output.id_or_guid = id.to_string();
-                                    }
-                                }
-                            }
-
-                            let (name, desc) = load_item_name_and_desc(
-                                dir,
-                                bundles_root,
-                                preferred_lang,
-                                mod_path,
-                            );
-
-                            let raw_type = parsed_properties.get("Type").cloned().unwrap_or_default();
-                            let mut category = map_type_to_category(&raw_type);
-
-                            if dir.to_string_lossy().contains("Vehicles") {
-                                category = "vehicles".to_string();
-                            }
-
-                            let rarity = parsed_properties
-                                .get("Rarity")
-                                .cloned()
-                                .unwrap_or_else(|| "Common".to_string());
-
-                            items.push(UnturnedItem {
-                                id,
-                                guid,
-                                name,
-                                category,
-                                description: desc,
-                                rarity,
-                                blueprints: if blueprints.is_empty() { None } else { Some(blueprints) },
-                            });
-                        }
-                    }
-                }
-            }
-        }
+    // If neither English nor Chinese translation exists, skip this item
+    if eng_name.is_empty() && chi_name.is_empty() {
+        return None;
     }
 
-    walk_dir(base_path, bundles_root, preferred_lang, mod_path, &mut items);
-    items
+    // 3. Combine or return
+    if !chi_name.is_empty() && !eng_name.is_empty() && chi_name.to_lowercase() != eng_name.to_lowercase() {
+        let combined_name = format!("{} ({})", eng_name, chi_name);
+        let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
+        Some((combined_name, desc))
+    } else if !chi_name.is_empty() {
+        let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
+        Some((chi_name, desc))
+    } else {
+        Some((eng_name, eng_desc))
+    }
 }
 
 // ── Blueprint Parsing Helpers ──────────────────────────────────────────────────
@@ -623,22 +515,16 @@ pub fn parse_dat_file_with_blueprints(
     
     if let Ok(file) = File::open(path) {
         let reader = BufReader::new(file);
-        let mut lines = Vec::new();
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                lines.push(line);
-            }
-        }
         
         let mut inside_blueprints_block = false;
         let mut blueprints_block_text = String::new();
         let mut bracket_count = 0;
         
-        for line in &lines {
+        for line in reader.lines().map_while(Result::ok) {
             let cleaned_line = if let Some(idx) = line.find("//") {
                 &line[..idx]
             } else {
-                line
+                &line
             };
             let cleaned_line = cleaned_line.trim();
             let cleaned_line = cleaned_line.strip_prefix("\u{feff}").unwrap_or(cleaned_line);
@@ -699,11 +585,11 @@ pub fn parse_dat_file_with_blueprints(
             if parts.len() >= 2 {
                 let key = parts[0].to_string();
                 let val = parts[1..].join(" ");
-                properties.insert(key.clone(), val.clone());
                 
                 if key == "GUID" {
-                    guid = Some(val);
+                    guid = Some(val.clone());
                 }
+                properties.insert(key, val);
             }
         }
         

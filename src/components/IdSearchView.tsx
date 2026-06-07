@@ -25,7 +25,16 @@ import {
 } from "@fluentui/react-icons";
 import { CATEGORIES, UnturnedItem } from "../utils/types";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ItemGrid } from "./id-search/ItemGrid";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface IndexingProgress {
+  current: number;
+  total: number;
+  message: string;
+}
 import { ItemDetailPane } from "./id-search/ItemDetailPane";
 import { IndexManagementPane } from "./id-search/IndexManagementPane";
 
@@ -150,6 +159,12 @@ const useStyles = makeStyles({
     zIndex: 100,
     boxShadow: tokens.shadow16,
   },
+  popoverContent: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("4px"),
+    maxWidth: "240px",
+  },
 });
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -165,9 +180,11 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
 
   const [items, setItems] = useState<UnturnedItem[]>([]);
   const [gamePath, setGamePath] = useState<string | null>(null);
+  const [extraPaths, setExtraPaths] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -203,11 +220,22 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     const savedPath = localStorage.getItem("unturned_game_path");
     setGamePath(savedPath);
 
+    const savedExtraPaths = localStorage.getItem("unturned_extra_paths");
+    if (savedExtraPaths) {
+      try {
+        setExtraPaths(JSON.parse(savedExtraPaths));
+      } catch (e) {
+        console.error("Failed to parse extra paths", e);
+      }
+    }
+
     invoke<UnturnedItem[]>("load_cached_index")
       .then((loadedItems) => {
         if (loadedItems && loadedItems.length > 0) {
+          // Wrap state updates to keep UI responsive
           setItems(loadedItems);
-          setSelectedItem(loadedItems[0]);
+          // Only select the first item if nothing is selected
+          setSelectedItem(prev => prev || loadedItems[0]);
         }
       })
       .catch((err) => {
@@ -216,6 +244,24 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       .finally(() => {
         setIsLoading(false);
       });
+  }, []);
+
+  // Set up event listener for indexing progress
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    
+    const setupListener = async () => {
+      const unsubscribe = await listen<IndexingProgress>("indexing-progress", (event) => {
+        setIndexingProgress(event.payload);
+      });
+      unlisten = unsubscribe;
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   // Debounce search query input
@@ -241,31 +287,32 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       vehicles: 0,
       medical: 0,
       structures: 0,
-      other: 0,
+      resources: 0,
     };
-    items.forEach((item) => {
-      if (stats[item.category] !== undefined) {
-        stats[item.category]++;
+    for (let i = 0; i < items.length; i++) {
+      const cat = items[i].category;
+      if (stats[cat] !== undefined) {
+        stats[cat]++;
       } else {
         stats.other++;
       }
-    });
+    }
     return stats;
   }, [items]);
 
   const filteredItems = useMemo(() => {
+    if (!searchQuery && selectedCategory === "all") return items;
+    
+    const query = searchQuery.toLowerCase();
     return items.filter((item) => {
-      const name = item.name || "";
-      const id = item.id !== undefined && item.id !== null ? item.id.toString() : "";
-      const description = item.description || "";
+      const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
+      if (!matchesCategory) return false;
 
-      const matchesSearch =
-        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        id.includes(searchQuery) ||
-        description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory =
-        selectedCategory === "all" || item.category === selectedCategory;
-      return matchesSearch && matchesCategory;
+      if (!query) return true;
+      
+      return (item.name || "").toLowerCase().includes(query) ||
+             (item.id !== undefined && item.id !== null && item.id.toString().includes(query)) ||
+             (item.description || "").toLowerCase().includes(query);
     });
   }, [items, searchQuery, selectedCategory]);
 
@@ -303,9 +350,12 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
 
     setIsSyncing(true);
     setSyncError(null);
+    setIndexingProgress({ current: 0, total: 100, message: "准备扫描..." });
+
     try {
       const loadedItems = await invoke<UnturnedItem[]>("scan_unturned_directory", {
         gamePath: path,
+        extraPaths: extraPaths,
         preferredLang: "Chinese",
       });
       if (loadedItems && loadedItems.length > 0) {
@@ -318,7 +368,27 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       setSyncError(err.toString() || "同步索引失败，请检查安装路径。");
     } finally {
       setIsSyncing(false);
+      setIndexingProgress(null);
     }
+  };
+
+  const handleAddExtraPath = async () => {
+    try {
+      const selected = await invoke<string | null>("pick_folder");
+      if (selected && !extraPaths.includes(selected)) {
+        const newPaths = [...extraPaths, selected];
+        setExtraPaths(newPaths);
+        localStorage.setItem("unturned_extra_paths", JSON.stringify(newPaths));
+      }
+    } catch (err) {
+      console.error("Failed to pick folder:", err);
+    }
+  };
+
+  const handleRemoveExtraPath = (pathToRemove: string) => {
+    const newPaths = extraPaths.filter(p => p !== pathToRemove);
+    setExtraPaths(newPaths);
+    localStorage.setItem("unturned_extra_paths", JSON.stringify(newPaths));
   };
 
   const handleCopy = (command: string) => {
@@ -336,7 +406,24 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     <div className={styles.emptyState} style={{ gap: "16px", padding: "32px", boxSizing: "border-box" }}>
       {isSyncing ? (
         <>
-          <Spinner size="huge" label="正在扫描游戏目录并建立索引..." labelPosition="below" />
+          <Spinner size="huge" label={indexingProgress?.message || "正在扫描游戏目录并建立索引..."} labelPosition="below" />
+          {indexingProgress && (
+            <div style={{ width: "300px", marginTop: "12px" }}>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground4, display: "block", textAlign: "center", marginBottom: "4px" }}>
+                进度: {indexingProgress.current} / {indexingProgress.total}
+              </Text>
+              <div style={{ width: "100%", height: "4px", backgroundColor: tokens.colorNeutralBackground3, borderRadius: "2px", overflow: "hidden" }}>
+                <div 
+                  style={{ 
+                    width: `${Math.min(100, (indexingProgress.current / (indexingProgress.total || 1)) * 100)}%`, 
+                    height: "100%", 
+                    backgroundColor: tokens.colorBrandBackground,
+                    transition: "width 0.3s ease"
+                  }} 
+                />
+              </div>
+            </div>
+          )}
           <Text size={300} style={{ color: tokens.colorNeutralForeground4, maxWidth: "300px", textAlign: "center" }}>
             解析 Unturned 物品与载具配置可能需要几秒钟，请稍候。
           </Text>
@@ -512,11 +599,15 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         ) : items.length > 0 ? (
           <IndexManagementPane
             gamePath={gamePath}
+            extraPaths={extraPaths}
             itemCount={items.length}
             categoryStats={categoryStats}
             isSyncing={isSyncing}
+            indexingProgress={indexingProgress}
             syncError={syncError}
             onSync={handleSync}
+            onAddExtraPath={handleAddExtraPath}
+            onRemoveExtraPath={handleRemoveExtraPath}
             onNavigate={onNavigate}
           />
         ) : (

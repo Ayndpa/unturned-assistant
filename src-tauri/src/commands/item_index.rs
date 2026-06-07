@@ -1,10 +1,24 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
+use serde::Serialize;
+use rayon::prelude::*;
+use walkdir::WalkDir;
 
-use crate::dat_parser::scan_directory;
+use crate::dat_parser::{parse_dat_file_with_blueprints, load_item_name_and_desc, map_type_to_category};
 use crate::models::UnturnedItem;
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexingProgress {
+    current: usize,
+    total: usize,
+    message: String,
+}
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
@@ -18,73 +32,151 @@ pub async fn pick_folder() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
-/// Scan the Unturned game directory, build an item index, and cache it.
+/// Scan the Unturned game directory and optional extra paths, build an item index, and cache it.
 #[tauri::command]
 pub async fn scan_unturned_directory(
     app: tauri::AppHandle,
+    window: tauri::Window,
     game_path: String,
+    extra_paths: Vec<String>,
     preferred_lang: String,
 ) -> Result<Vec<UnturnedItem>, String> {
-    let path = Path::new(&game_path);
-    let bundles_path = path.join("Bundles");
+    let base_path = PathBuf::from(&game_path);
+    let bundles_path = base_path.join("Bundles");
 
-    if !bundles_path.exists() {
-        return Err("找不到 Bundles 目录，请确保游戏安装路径正确。".to_string());
+    let mut scan_targets = Vec::new();
+    if bundles_path.exists() {
+        let items_path = bundles_path.join("Items");
+        let vehicles_path = bundles_path.join("Vehicles");
+        if items_path.exists() { scan_targets.push(items_path); }
+        if vehicles_path.exists() { scan_targets.push(vehicles_path); }
     }
 
-    let items_path = bundles_path.join("Items");
-    let vehicles_path = bundles_path.join("Vehicles");
+    for p in extra_paths {
+        let extra_path = PathBuf::from(p);
+        if extra_path.exists() { scan_targets.push(extra_path); }
+    }
 
-    // Detect ChineseLocalMod folder in the parent of the Unturned installation
-    let parent_dir = path.parent();
-    let mod_path = parent_dir
+    if scan_targets.is_empty() {
+        return Err("未找到有效的扫描目录，请确保路径正确。".to_string());
+    }
+
+    // Detect ChineseLocalMod folder
+    let mod_path = base_path.parent()
         .map(|p| p.join("ChineseLocalMod"))
         .filter(|p| p.exists());
-    let mod_ref = mod_path.as_deref();
 
-    let mut all_items = Vec::new();
+    // Step 1: Rapidly collect all .dat file paths (CPU-bound sorting & filtering)
+    let dat_file_paths: Vec<PathBuf> = scan_targets.par_iter().flat_map(|target| {
+        WalkDir::new(target)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                if e.file_type().is_dir() {
+                    let name = e.file_name().to_string_lossy();
+                    // Skip folders that definitely don't contain item/vehicle data
+                    return !matches!(name.as_ref(), "Documentation" | "Scripts" | "Bundles" | ".git" | "Source" | "Trees" | "Nodes" | "Objects");
+                }
+                
+                if e.path().extension().and_then(|s| s.to_str()) == Some("dat") {
+                    if let Some(stem) = e.path().file_stem().and_then(|s| s.to_str()) {
+                        let stem_lower = stem.to_lowercase();
+                        // Unturned items have unique names, translations use standard language names.
+                        let is_translation = matches!(
+                            stem_lower.as_str(),
+                            "english" | "chinese" | "simplified_chinese" | "schinese" | "german" | 
+                            "spanish" | "french" | "russian" | "japanese" | "brazilian" | "portuguese" | "turkish"
+                        );
+                        if is_translation { return false; }
+                        return true;
+                    }
+                }
+                false
+            })
+            .map(|e| e.into_path())
+            .collect::<Vec<_>>()
+    }).collect();
 
-    if items_path.exists() {
-        all_items.extend(scan_directory(
-            &items_path,
-            &bundles_path,
-            &preferred_lang,
-            mod_ref,
-        ));
-    }
+    let total_files = dat_file_paths.len();
+    let processed_count = Arc::new(AtomicUsize::new(0));
+    let last_update = Arc::new(Mutex::new(Instant::now()));
+    
+    // Step 2: Parallel Parsing using Rayon
+    let all_items: Vec<UnturnedItem> = dat_file_paths.par_iter().filter_map(|path| {
+        let parent_dir = path.parent()?;
+        
+        // Parse
+        let (guid, mut blueprints, parsed_properties) = parse_dat_file_with_blueprints(path);
+        let id = parsed_properties.get("ID")?.trim().parse::<u32>().ok()?;
 
-    if vehicles_path.exists() {
-        all_items.extend(scan_directory(
-            &vehicles_path,
-            &bundles_path,
-            &preferred_lang,
-            mod_ref,
-        ));
-    }
+        // Blueprint "this" resolution
+        for bp in &mut blueprints {
+            for input in &mut bp.inputs { if input.id_or_guid.to_lowercase() == "this" { input.id_or_guid = id.to_string(); } }
+            for output in &mut bp.outputs { if output.id_or_guid.to_lowercase() == "this" { output.id_or_guid = id.to_string(); } }
+        }
 
-    // Sort items by ID
-    all_items.sort_by_key(|item| item.id);
+        let (name, desc) = load_item_name_and_desc(parent_dir, &bundles_path, &preferred_lang, mod_path.as_deref())?;
+        
+        // Progress Reporting (Throttled to max 10 updates per second)
+        let current = processed_count.fetch_add(1, Ordering::SeqCst) + 1;
+        {
+            let mut last = last_update.lock().unwrap();
+            if last.elapsed() > Duration::from_millis(100) || current == total_files {
+                let _ = window.emit("indexing-progress", IndexingProgress {
+                    current,
+                    total: total_files,
+                    message: name.clone(),
+                });
+                *last = Instant::now();
+            }
+        }
 
-    // Persist to cache
+        let raw_type = parsed_properties.get("Type").cloned().unwrap_or_default();
+        let mut category = map_type_to_category(&raw_type);
+        if parent_dir.to_string_lossy().contains("Vehicles") { category = Some("vehicles".to_string()); }
+        let category = category?;
+
+        Some(UnturnedItem {
+            id,
+            guid,
+            name,
+            category,
+            description: desc,
+            rarity: parsed_properties.get("Rarity").cloned().unwrap_or_else(|| "Common".to_string()),
+            blueprints: if blueprints.is_empty() { None } else { Some(blueprints) },
+        })
+    }).collect();
+
+    // Final Sort
+    let mut sorted_items = all_items;
+    sorted_items.sort_by_key(|item| item.id);
+
+    // Persist Cache with Bincode (High Performance)
     if let Ok(cache_dir) = app.path().app_data_dir() {
         let _ = std::fs::create_dir_all(&cache_dir);
-        let cache_file = cache_dir.join("item_index.json");
-        if let Ok(file) = File::create(cache_file) {
-            let _ = serde_json::to_writer_pretty(file, &all_items);
+        let cache_file = cache_dir.join("item_index.bin");
+        if let Ok(mut file) = File::create(cache_file) {
+            let _ = bincode::serialize_into(&mut file, &sorted_items);
         }
     }
 
-    Ok(all_items)
+    let _ = window.emit("indexing-progress", IndexingProgress {
+        current: total_files,
+        total: total_files,
+        message: "索引构建完成！".to_string(),
+    });
+
+    Ok(sorted_items)
 }
 
 /// Load the previously cached item index from disk.
 #[tauri::command]
 pub async fn load_cached_index(app: tauri::AppHandle) -> Result<Vec<UnturnedItem>, String> {
     if let Ok(cache_dir) = app.path().app_data_dir() {
-        let cache_file = cache_dir.join("item_index.json");
-        if cache_file.exists() {
-            if let Ok(file) = File::open(cache_file) {
-                if let Ok(items) = serde_json::from_reader::<_, Vec<UnturnedItem>>(file) {
+        let bin_cache = cache_dir.join("item_index.bin");
+        if bin_cache.exists() {
+            if let Ok(mut file) = File::open(bin_cache) {
+                if let Ok(items) = bincode::deserialize_from::<_, Vec<UnturnedItem>>(&mut file) {
                     return Ok(items);
                 }
             }

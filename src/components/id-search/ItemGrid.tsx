@@ -104,7 +104,7 @@ export const ItemGrid: React.FC<ItemGridProps> = ({
           </Text>
           <br />
           <Text size={300} style={{ color: tokens.colorNeutralForeground4 }}>
-            尝试更换搜索关键词或选择不同的分类。
+            尝试更换搜索关键词，或点击右上角 <Text weight="bold" style={{ color: tokens.colorBrandForeground1 }}>“索引管理”</Text> 添加创意工坊数据。
           </Text>
         </div>
       </div>

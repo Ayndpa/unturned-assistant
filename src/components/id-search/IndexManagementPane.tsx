@@ -13,7 +13,14 @@ import {
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
-import { ArrowSyncRegular, SettingsRegular } from "@fluentui/react-icons";
+import {
+  ArrowSyncRegular,
+  SettingsRegular,
+  BoxRegular,
+  FolderAddRegular,
+  DismissRegular,
+  FolderRegular
+} from "@fluentui/react-icons";
 import { CATEGORIES } from "../../utils/types";
 
 const useStyles = makeStyles({
@@ -22,25 +29,59 @@ const useStyles = makeStyles({
     flexDirection: "column",
     gap: "8px",
   },
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontWeight: "bold",
+    marginBottom: "4px",
+  },
+  pathItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "6px 8px",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: "4px",
+    border: `1px solid ${tokens.colorNeutralStroke3}`,
+    marginTop: "4px",
+  },
+  pathText: {
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground3,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    flex: 1,
+    marginRight: "8px",
+  }
 });
 
 interface IndexManagementPaneProps {
   gamePath: string | null;
+  extraPaths: string[];
   itemCount: number;
   categoryStats: Record<string, number>;
   isSyncing: boolean;
+  indexingProgress: { current: number; total: number; message: string } | null;
   syncError: string | null;
   onSync: () => void;
+  onAddExtraPath: () => void;
+  onRemoveExtraPath: (path: string) => void;
   onNavigate: (page: string) => void;
 }
 
 export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
   gamePath,
+  extraPaths,
   itemCount,
   categoryStats,
   isSyncing,
+  indexingProgress,
   syncError,
   onSync,
+  onAddExtraPath,
+  onRemoveExtraPath,
   onNavigate,
 }) => {
   const styles = useStyles();
@@ -80,6 +121,60 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           </Text>
         </div>
       </Card>
+
+      <Divider />
+
+      {/* Workshop Section */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div className={styles.sectionTitle}>
+          <BoxRegular />
+          <Text>创意工坊与自定义数据</Text>
+        </div>
+        <Card
+          style={{
+            backgroundColor: "rgba(255, 255, 255, 0.03)",
+            padding: "12px",
+            border: `1px dashed ${tokens.colorNeutralStroke3}`,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              如果您订阅了创意工坊的地图或物品包，或者有自定义的 Mod 目录，可以将其添加到索引中。
+            </Text>
+            
+            {extraPaths.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <Text size={100} weight="semibold" style={{ color: tokens.colorNeutralForeground4 }}>已添加的目录：</Text>
+                {extraPaths.map((path) => (
+                  <div key={path} className={styles.pathItem}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, overflow: "hidden" }}>
+                      <FolderRegular style={{ fontSize: "14px", flexShrink: 0 }} />
+                      <span className={styles.pathText} title={path}>{path}</span>
+                    </div>
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<DismissRegular />}
+                      onClick={() => onRemoveExtraPath(path)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              size="small"
+              icon={<FolderAddRegular />}
+              onClick={onAddExtraPath}
+              disabled={isSyncing}
+            >
+              添加扫描目录
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      <Divider />
 
       {/* Path info */}
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -132,6 +227,25 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
 
       {/* Actions */}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {isSyncing && indexingProgress && (
+          <div style={{ marginBottom: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+              <Text size={100} style={{ color: tokens.colorNeutralForeground4 }}>{indexingProgress.message}</Text>
+              <Text size={100} style={{ color: tokens.colorNeutralForeground4 }}>{indexingProgress.current} / {indexingProgress.total}</Text>
+            </div>
+            <div style={{ width: "100%", height: "4px", backgroundColor: tokens.colorNeutralBackground3, borderRadius: "2px", overflow: "hidden" }}>
+              <div 
+                style={{ 
+                  width: `${Math.min(100, (indexingProgress.current / (indexingProgress.total || 1)) * 100)}%`, 
+                  height: "100%", 
+                  backgroundColor: tokens.colorBrandBackground,
+                  transition: "width 0.3s ease"
+                }} 
+              />
+            </div>
+          </div>
+        )}
+        
         <Button
           appearance="primary"
           icon={<ArrowSyncRegular />}
@@ -139,7 +253,7 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           disabled={isSyncing}
           style={{ width: "100%" }}
         >
-          重新扫描并重建索引
+          {isSyncing ? "正在同步..." : "重新扫描并重建索引"}
         </Button>
         <Button
           appearance="secondary"
