@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::models::{Blueprint, BlueprintItem};
 
@@ -63,27 +63,63 @@ pub fn parse_dat_file(path: &Path) -> HashMap<String, String> {
 /// Load a specific language translation file (no fallback).
 /// Returns `(name, description)`.
 pub fn load_specific_translation(dir: &Path, lang: &str) -> (String, String) {
-    let mut files_to_try = vec![format!("{}.dat", lang)];
-    if lang == "Chinese" {
-        files_to_try.push("Simplified_Chinese.dat".to_string());
-        files_to_try.push("Schinese.dat".to_string());
-        files_to_try.push("SChinese.dat".to_string());
-    }
-
-    for filename in files_to_try {
-        let lang_path = dir.join(&filename);
-        if lang_path.exists() {
-            let translation = parse_dat_file(&lang_path);
-            let name = translation.get("Name").cloned();
-            let desc = translation.get("Description").cloned().unwrap_or_default();
-            if let Some(n) = name {
-                if !n.trim().is_empty() {
-                    return (n, desc);
-                }
+    let files_to_try: Vec<&str> = if lang == "Chinese" {
+        vec![
+            "Chinese.dat",
+            "Simplified_Chinese.dat",
+            "SimplifiedChinese.dat",
+            "Schinese.dat",
+            "SChinese.dat",
+            "Chinese_Simplified.dat",
+            "English.dat",
+        ]
+    } else {
+        vec!["English.dat"]
+    };
+    if let Some(path) = find_translation_file(dir, &files_to_try) {
+        let translation = parse_dat_file(&path);
+        let name = translation.get("Name").cloned();
+        let desc = translation.get("Description").cloned().unwrap_or_default();
+        if let Some(n) = name {
+            if !n.trim().is_empty() {
+                return (n, desc);
             }
         }
     }
     (String::new(), String::new())
+}
+
+fn normalize_filename(name: &str) -> String {
+    name.to_lowercase()
+        .replace(".dat", "")
+        .replace('-', "")
+        .replace('_', "")
+        .trim()
+        .to_string()
+}
+
+fn find_translation_file(dir: &Path, files_to_try: &[&str]) -> Option<PathBuf> {
+    let mut available = HashMap::new();
+    let entries = std::fs::read_dir(dir).ok()?;
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let entry_path = entry.path();
+        if entry_path.extension().and_then(|s| s.to_str()) != Some("dat") {
+            continue;
+        }
+
+        let stem = entry_path.file_stem().and_then(|s| s.to_str())?;
+        available.insert(normalize_filename(stem), entry_path);
+    }
+
+    for filename in files_to_try {
+        let normalized_target = normalize_filename(filename);
+        if let Some(path) = available.get(&normalized_target) {
+            return Some(path.clone());
+        }
+    }
+
+    None
 }
 
 /// Load bilingual (English + preferred language) item name and description.
@@ -109,21 +145,23 @@ pub fn load_item_name_and_desc(
                 dir.strip_prefix(bundles_root.parent().unwrap_or(bundles_root))
             {
                 let mod_dir = mod_root.join(rel_path);
-                let translation_files =
-                    vec!["Schinese.dat", "SChinese.dat", "Simplified_Chinese.dat", "Chinese.dat"];
-                for filename in translation_files {
-                    let lang_path = mod_dir.join(filename);
-                    if lang_path.exists() {
-                        let translation = parse_dat_file(&lang_path);
-                        if let Some(n) = translation.get("Name") {
-                            if !n.trim().is_empty() {
-                                chi_name = n.clone();
-                                chi_desc = translation
-                                    .get("Description")
-                                    .cloned()
-                                    .unwrap_or_default();
-                                break;
-                            }
+                let translation_files = [
+                    "Chinese.dat",
+                    "Simplified_Chinese.dat",
+                    "SimplifiedChinese.dat",
+                    "Schinese.dat",
+                    "SChinese.dat",
+                    "Chinese_Simplified.dat",
+                ];
+                if let Some(path) = find_translation_file(&mod_dir, &translation_files) {
+                    let translation = parse_dat_file(&path);
+                    if let Some(n) = translation.get("Name") {
+                        if !n.trim().is_empty() {
+                            chi_name = n.clone();
+                            chi_desc = translation
+                                .get("Description")
+                                .cloned()
+                                .unwrap_or_default();
                         }
                     }
                 }
@@ -132,7 +170,24 @@ pub fn load_item_name_and_desc(
 
         // 2b. Fall back to game directory Chinese translation
         if chi_name.is_empty() {
-            let (local_chi_name, local_chi_desc) = load_specific_translation(dir, "Chinese");
+            let (local_chi_name, local_chi_desc) = {
+                let translation_files = [
+                    "Chinese.dat",
+                    "Simplified_Chinese.dat",
+                    "SimplifiedChinese.dat",
+                    "Schinese.dat",
+                    "SChinese.dat",
+                    "Chinese_Simplified.dat",
+                ];
+                if let Some(path) = find_translation_file(dir, &translation_files) {
+                    let translation = parse_dat_file(&path);
+                    let name = translation.get("Name").cloned().unwrap_or_default();
+                    let desc = translation.get("Description").cloned().unwrap_or_default();
+                    (name, desc)
+                } else {
+                    (String::new(), String::new())
+                }
+            };
             if !local_chi_name.is_empty() {
                 chi_name = local_chi_name;
                 chi_desc = local_chi_desc;
@@ -142,7 +197,13 @@ pub fn load_item_name_and_desc(
 
     // If neither English nor Chinese translation exists, skip this item
     if eng_name.is_empty() && chi_name.is_empty() {
-        return None;
+        return Some((
+            dir.file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("Unknown Item")
+                .to_string(),
+            String::new(),
+        ));
     }
 
     // 3. Combine or return
@@ -517,6 +578,7 @@ pub fn parse_dat_file_with_blueprints(
     let mut properties = HashMap::new();
     let mut guid = None;
     let mut blueprints = Vec::new();
+    let mut scope_depth = 0usize;
     
     if let Ok(file) = File::open(path) {
         let reader = BufReader::new(file);
@@ -564,7 +626,7 @@ pub fn parse_dat_file_with_blueprints(
                 continue;
             }
             
-            if cleaned_line.starts_with("Blueprints") && cleaned_line.contains('[') {
+                if cleaned_line.starts_with("Blueprints") && cleaned_line.contains('[') {
                 inside_blueprints_block = true;
                 bracket_count = 0;
                 blueprints_block_text.clear();
@@ -585,7 +647,18 @@ pub fn parse_dat_file_with_blueprints(
                 }
                 continue;
             }
-            
+
+            if scope_depth > 0 {
+                for c in cleaned_line.chars() {
+                    match c {
+                        '{' | '[' => scope_depth += 1,
+                        '}' | ']' => scope_depth = scope_depth.saturating_sub(1),
+                        _ => {}
+                    }
+                }
+                continue;
+            }
+
             let parts: Vec<&str> = cleaned_line.split_whitespace().collect();
             if parts.len() >= 2 {
                 let key = parts[0].to_string();
@@ -595,6 +668,14 @@ pub fn parse_dat_file_with_blueprints(
                     guid = Some(val.clone());
                 }
                 properties.insert(key, val);
+            }
+
+            for c in cleaned_line.chars() {
+                match c {
+                    '{' | '[' => scope_depth += 1,
+                    '}' | ']' => scope_depth = scope_depth.saturating_sub(1),
+                    _ => {}
+                }
             }
         }
         

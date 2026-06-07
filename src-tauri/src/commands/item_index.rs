@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
@@ -19,6 +20,11 @@ struct IndexingProgress {
     total: usize,
     message: String,
 }
+
+type IconCacheMap = HashMap<String, String>;
+type GameIconCache = HashMap<String, IconCacheMap>;
+
+static ICON_PATH_CACHE: OnceLock<Mutex<GameIconCache>> = OnceLock::new();
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
@@ -169,9 +175,95 @@ pub async fn scan_unturned_directory(
     Ok(sorted_items)
 }
 
+fn icon_cache_key(game_path: &str, is_vehicle: bool) -> String {
+    format!("{}|{}", game_path, if is_vehicle { "Vehicles" } else { "Items" })
+}
+
+fn normalize_guid_for_icon_lookup(guid: &str) -> String {
+    guid.trim()
+        .trim_matches(&['{', '}'][..])
+        .replace("-", "")
+        .to_lowercase()
+}
+
+fn build_icon_path_cache(search_path: &Path, is_vehicle: bool) -> IconCacheMap {
+    let mut cache = IconCacheMap::new();
+
+    if !search_path.exists() {
+        return cache;
+    }
+
+    for entry in WalkDir::new(search_path).into_iter().filter_map(|entry| entry.ok()) {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name.to_lowercase(),
+            None => continue,
+        };
+        if !name.ends_with(".png") {
+            continue;
+        }
+
+        let stem_clean = name.trim_end_matches(".png").replace("-", "");
+        if stem_clean.is_empty() {
+            continue;
+        }
+
+        // Exact match by normalized GUID.
+        cache.entry(stem_clean.clone())
+            .or_insert_with(|| path.to_string_lossy().to_string());
+
+        // Some image packs append suffixes, e.g. <guid>_256.png or <guid>-...
+        if let Some(pos) = stem_clean.find('_') {
+            if pos > 0 {
+                let prefix = stem_clean[..pos].to_string();
+                cache.entry(prefix)
+                    .or_insert_with(|| path.to_string_lossy().to_string());
+            }
+        }
+        if let Some(pos) = stem_clean.find('-') {
+            if pos > 0 {
+                let prefix = stem_clean[..pos].to_string();
+                cache.entry(prefix)
+                    .or_insert_with(|| path.to_string_lossy().to_string());
+            }
+        }
+
+        // Vehicles may use guid-r-g-b.png format.
+        if is_vehicle {
+            let prefix_8 = stem_clean.chars().take(32).collect::<String>();
+            if !prefix_8.is_empty() && prefix_8 != stem_clean {
+                cache.entry(prefix_8)
+                    .or_insert_with(|| path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    cache
+}
+
+fn clear_icon_path_cache(game_path: &str) {
+    let Some(cache) = ICON_PATH_CACHE.get() else {
+        return;
+    };
+    let item_key = icon_cache_key(game_path, false);
+    let vehicle_key = icon_cache_key(game_path, true);
+
+    let mut cache = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    cache.remove(&item_key);
+    cache.remove(&vehicle_key);
+}
+
 #[tauri::command]
 pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool) -> Option<String> {
-    let base_path = PathBuf::from(game_path).join("Extras");
+    let game_path_ref = game_path.as_str();
+    let base_path = PathBuf::from(game_path_ref).join("Extras");
     if !base_path.exists() {
         return None;
     }
@@ -183,58 +275,16 @@ pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool
         return None;
     }
 
-    let target_guid_clean = guid.replace("-", "").to_lowercase();
+    let target_guid_clean = normalize_guid_for_icon_lookup(&guid);
+    let cache_id = icon_cache_key(game_path_ref, is_vehicle);
+    let mut cache = ICON_PATH_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock().map(|g| g).unwrap_or_else(|p| p.into_inner());
 
-    // Helper to find a matching file in a directory by normalized GUID
-    let find_in_dir = |dir: &Path| -> Option<String> {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let name = entry.file_name().to_string_lossy().to_string();
-                let name_lower = name.to_lowercase();
-                
-                // Remove hyphens and .png extension for comparison
-                let name_clean = name_lower.replace(".png", "").replace("-", "");
-                
-                if is_vehicle {
-                    // Vehicles often have color suffix: {guid}-{r}-{g}-{b}.png
-                    // We check if it STARTS with our clean guid
-                    if name_clean.starts_with(&target_guid_clean) && name_lower.ends_with(".png") {
-                        return Some(entry.path().to_string_lossy().to_string());
-                    }
-                } else {
-                    // Items should match exactly
-                    if name_clean == target_guid_clean && name_lower.ends_with(".png") {
-                        return Some(entry.path().to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-        None
-    };
-
-    // 1. Check Official
-    let official_path = search_path.join("Official");
-    if official_path.exists() {
-        if let Some(path) = find_in_dir(&official_path) {
-            return Some(path);
-        }
+    if !cache.contains_key(&cache_id) {
+        let icon_cache = build_icon_path_cache(&search_path, is_vehicle);
+        cache.insert(cache_id.clone(), icon_cache);
     }
 
-    // 2. Check Workshop
-    let workshop_path = search_path.join("Workshop");
-    if workshop_path.exists() {
-        if let Ok(entries) = std::fs::read_dir(&workshop_path) {
-            for mod_entry in entries.filter_map(|e| e.ok()) {
-                if mod_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    if let Some(path) = find_in_dir(&mod_entry.path()) {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-    }
-
-    None
+    cache.get(&cache_id).and_then(|index| index.get(&target_guid_clean).cloned())
 }
 
 /// Load the previously cached item index from disk.
@@ -333,6 +383,8 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
         let _ = fs::remove_dir_all(&module_dir);
     }
 
+    clear_icon_path_cache(&game_path);
+
     Ok(())
 }
 
@@ -343,6 +395,8 @@ pub async fn remove_image_index_module(game_path: String) -> Result<(), String> 
     if module_dir.exists() {
         fs::remove_dir_all(&module_dir).map_err(|e| format!("删除失败: {}", e))?;
     }
+
+    clear_icon_path_cache(&game_path);
     Ok(())
 }
 

@@ -163,6 +163,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     addToHistory(commandTemplate);
   };
 
+  const normalizeIdOrGuid = (idOrGuid: string) => idOrGuid.trim();
+
   useEffect(() => {
     if (gamePath && selectedItem?.guid) {
       invoke<string | null>("resolve_item_icon", {
@@ -191,63 +193,15 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     const ids = new Set<string>();
     selectedItem.blueprints.forEach((blueprint) => {
       blueprint.inputs.forEach((input) => {
-        ids.add(input.idOrGuid);
+        ids.add(normalizeIdOrGuid(input.idOrGuid));
       });
       blueprint.outputs.forEach((output) => {
-        ids.add(output.idOrGuid);
+        ids.add(normalizeIdOrGuid(output.idOrGuid));
       });
     });
 
     return Array.from(ids);
   }, [selectedItem?.blueprints]);
-
-  useEffect(() => {
-    if (!gamePath || recipeRelatedItemIds.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    recipeRelatedItemIds.forEach((idOrGuid) => {
-      if (recipeItemIcons[idOrGuid] !== undefined) {
-        return;
-      }
-
-      const targetItem = resolveItem ? resolveItem(idOrGuid) : items.find((item) => item.id.toString() === idOrGuid);
-
-      if (!targetItem?.guid) {
-        setRecipeItemIcons((prev) => ({
-          ...prev,
-          [idOrGuid]: null,
-        }));
-        return;
-      }
-
-      invoke<string | null>("resolve_item_icon", {
-        gamePath,
-        guid: targetItem.guid,
-        isVehicle: targetItem.category === "vehicles",
-      })
-        .then((path) => {
-          if (cancelled) return;
-          setRecipeItemIcons((prev) => ({
-            ...prev,
-            [idOrGuid]: path ? convertFileSrc(path) : null,
-          }));
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setRecipeItemIcons((prev) => ({
-            ...prev,
-            [idOrGuid]: null,
-          }));
-        });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gamePath, items, recipeRelatedItemIds, recipeItemIcons, resolveItem]);
 
   // Find recipes where this item is used as an input
   const usages = useMemo(() => {
@@ -268,6 +222,63 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     });
   }, [selectedItem, items]);
 
+  const recipeIconLookupIds = useMemo(() => {
+    const ids = new Set<string>(recipeRelatedItemIds);
+    usages.forEach((usageItem) => {
+      ids.add(usageItem.id.toString());
+    });
+    return Array.from(ids);
+  }, [recipeRelatedItemIds, usages]);
+
+  useEffect(() => {
+    if (!gamePath || recipeIconLookupIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    recipeIconLookupIds.forEach((idOrGuid) => {
+      if (recipeItemIcons[idOrGuid] !== undefined) {
+        return;
+      }
+
+      const normalizedIdOrGuid = normalizeIdOrGuid(idOrGuid);
+      const targetItem = resolveItem ? resolveItem(normalizedIdOrGuid) : items.find((item) => item.id.toString() === normalizedIdOrGuid);
+
+      if (!targetItem?.guid) {
+        setRecipeItemIcons((prev) => ({
+          ...prev,
+          [normalizedIdOrGuid]: null,
+        }));
+        return;
+      }
+
+      invoke<string | null>("resolve_item_icon", {
+        gamePath,
+        guid: targetItem.guid,
+        isVehicle: targetItem.category === "vehicles",
+      })
+        .then((path) => {
+          if (cancelled) return;
+          setRecipeItemIcons((prev) => ({
+            ...prev,
+            [normalizedIdOrGuid]: path ? convertFileSrc(path) : null,
+          }));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setRecipeItemIcons((prev) => ({
+            ...prev,
+            [normalizedIdOrGuid]: null,
+          }));
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gamePath, items, recipeIconLookupIds, recipeItemIcons, resolveItem]);
+
   // Helper to parse bilingual names (e.g. "English (Chinese)")
   const getBilingualNames = (fullName: string) => {
     const nameMatch = fullName.match(/^(.*?)\s*\((.*?)\)$/);
@@ -283,7 +294,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     amount: number,
     isTool: boolean
   ) => {
-    const targetItem = resolveItem ? resolveItem(idOrGuid) : null;
+    const normalizedIdOrGuid = normalizeIdOrGuid(idOrGuid);
+    const targetItem = resolveItem ? resolveItem(normalizedIdOrGuid) : null;
     if (!targetItem) {
       return (
         <Button
@@ -304,7 +316,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           disabled
         >
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <Text weight="semibold" style={{ fontSize: "13px" }}>未知物品 ({idOrGuid})</Text>
+            <Text weight="semibold" style={{ fontSize: "13px" }}>未知物品 ({normalizedIdOrGuid})</Text>
             <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>
               {isTool ? "工具 (不消耗)" : `数量: ${amount}`}
             </Caption1>
@@ -315,7 +327,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
     const { primary, secondary } = getBilingualNames(targetItem.name);
     const rColor = RARITY_COLORS[targetItem.rarity];
-    const iconSrc = recipeItemIcons[idOrGuid];
+    const iconSrc = recipeItemIcons[normalizedIdOrGuid];
 
     return (
       <Button
