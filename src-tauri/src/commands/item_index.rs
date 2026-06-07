@@ -169,6 +169,74 @@ pub async fn scan_unturned_directory(
     Ok(sorted_items)
 }
 
+#[tauri::command]
+pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool) -> Option<String> {
+    let base_path = PathBuf::from(game_path).join("Extras");
+    if !base_path.exists() {
+        return None;
+    }
+
+    let sub_folder = if is_vehicle { "Vehicles" } else { "Items" };
+    let search_path = base_path.join(sub_folder);
+
+    if !search_path.exists() {
+        return None;
+    }
+
+    let target_guid_clean = guid.replace("-", "").to_lowercase();
+
+    // Helper to find a matching file in a directory by normalized GUID
+    let find_in_dir = |dir: &Path| -> Option<String> {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let name_lower = name.to_lowercase();
+                
+                // Remove hyphens and .png extension for comparison
+                let name_clean = name_lower.replace(".png", "").replace("-", "");
+                
+                if is_vehicle {
+                    // Vehicles often have color suffix: {guid}-{r}-{g}-{b}.png
+                    // We check if it STARTS with our clean guid
+                    if name_clean.starts_with(&target_guid_clean) && name_lower.ends_with(".png") {
+                        return Some(entry.path().to_string_lossy().to_string());
+                    }
+                } else {
+                    // Items should match exactly
+                    if name_clean == target_guid_clean && name_lower.ends_with(".png") {
+                        return Some(entry.path().to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+        None
+    };
+
+    // 1. Check Official
+    let official_path = search_path.join("Official");
+    if official_path.exists() {
+        if let Some(path) = find_in_dir(&official_path) {
+            return Some(path);
+        }
+    }
+
+    // 2. Check Workshop
+    let workshop_path = search_path.join("Workshop");
+    if workshop_path.exists() {
+        if let Ok(entries) = std::fs::read_dir(&workshop_path) {
+            for mod_entry in entries.filter_map(|e| e.ok()) {
+                if mod_entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    if let Some(path) = find_in_dir(&mod_entry.path()) {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Load the previously cached item index from disk.
 #[tauri::command]
 pub async fn load_cached_index(app: tauri::AppHandle) -> Result<Vec<UnturnedItem>, String> {

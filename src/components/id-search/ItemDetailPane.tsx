@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import {
   Text,
   Badge,
@@ -11,9 +11,17 @@ import {
   shorthands,
   tokens,
   Card,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  SplitButton,
+  Input,
 } from "@fluentui/react-components";
-import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular } from "@fluentui/react-icons";
+import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular } from "@fluentui/react-icons";
 import { CATEGORIES, RARITY_COLORS, UnturnedItem } from "../../utils/types";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
 const useStyles = makeStyles({
   emptyState: {
@@ -63,10 +71,45 @@ const useStyles = makeStyles({
     fontWeight: "600",
     fontSize: "11px",
   },
+  imageContainer: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: tokens.borderRadiusMedium,
+    height: "200px",
+    width: "100%",
+    marginTop: "8px",
+    ...shorthands.overflow("hidden"),
+  },
+  itemIcon: {
+    maxHeight: "180px",
+    maxWidth: "90%",
+    objectFit: "contain",
+  },
+  translucentButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(8px)",
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke3),
+    "&:hover": {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
+    "&:active": {
+      backgroundColor: "rgba(255, 255, 255, 0.15)",
+    }
+  },
+  menuPopover: {
+    backgroundColor: "rgba(30, 30, 30, 0.8)",
+    backdropFilter: "blur(20px)",
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
+    boxShadow: tokens.shadow16,
+  }
 });
 
 interface ItemDetailPaneProps {
   selectedItem: UnturnedItem | null;
+  gamePath?: string | null;
   isSyncing: boolean;
   onCopy: (command: string) => void;
   onSelectItem?: (item: UnturnedItem) => void;
@@ -76,6 +119,7 @@ interface ItemDetailPaneProps {
 
 export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
   selectedItem,
+  gamePath,
   isSyncing,
   onCopy,
   onSelectItem,
@@ -83,6 +127,59 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
   items = [],
 }) => {
   const styles = useStyles();
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [commandTemplate, setCommandTemplate] = useState<string>(() => {
+    return localStorage.getItem("unturned_command_template") || "/give <id>";
+  });
+  const [history, setHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("unturned_command_history");
+      return saved ? JSON.parse(saved) : ["/give <id>", "/buy <id>", "/sell <id>", "<id>"];
+    } catch {
+      return ["/give <id>", "/buy <id>", "/sell <id>", "<id>"];
+    }
+  });
+
+  const handleTemplateChange = (val: string) => {
+    setCommandTemplate(val);
+    localStorage.setItem("unturned_command_template", val);
+  };
+
+  const addToHistory = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    
+    setHistory(prev => {
+      const newHistory = [trimmed, ...prev.filter(h => h !== trimmed)].slice(0, 10);
+      localStorage.setItem("unturned_command_history", JSON.stringify(newHistory));
+      return newHistory;
+    });
+  };
+
+  const handleCopyCommand = () => {
+    if (!selectedItem) return;
+    const cmd = commandTemplate.replace(/<id>|\{id\}/gi, selectedItem.id.toString());
+    onCopy(cmd);
+    addToHistory(commandTemplate);
+  };
+
+  useEffect(() => {
+    if (gamePath && selectedItem?.guid) {
+      invoke<string | null>("resolve_item_icon", {
+        gamePath,
+        guid: selectedItem.guid,
+        isVehicle: selectedItem.category === "vehicles"
+      }).then((path) => {
+        if (path) {
+          setIconUrl(convertFileSrc(path));
+        } else {
+          setIconUrl(null);
+        }
+      }).catch(console.error);
+    } else {
+      setIconUrl(null);
+    }
+  }, [gamePath, selectedItem?.guid, selectedItem?.category]);
 
   // Find recipes where this item is used as an input
   const usages = useMemo(() => {
@@ -256,13 +353,67 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
             {CATEGORIES.find((c) => c.key === selectedItem.category)?.label || "其他"}
           </Badge>
         </div>
+
+        {iconUrl && (
+          <div className={styles.imageContainer}>
+            <img src={iconUrl} alt={bilingualNames.primary} className={styles.itemIcon} />
+          </div>
+        )}
       </div>
 
       <Divider />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <Text weight="semibold">物品 ID</Text>
-        <div className={styles.detailCardId}>{selectedItem.id}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <Text weight="semibold">物品 ID & 指令模板</Text>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className={styles.detailCardId}>{selectedItem.id}</div>
+          
+          <div style={{ display: "flex", flex: 1, position: "relative" }}>
+            <Input
+              className={styles.translucentButton}
+              value={commandTemplate}
+              onChange={(_, data) => handleTemplateChange(data.value)}
+              placeholder="自定义指令，如 /sell <id>"
+              style={{ width: "100%" }}
+              contentAfter={
+                <Menu>
+                  <MenuTrigger disableButtonEnhancement>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<ChevronDownRegular />}
+                      title="历史记录"
+                    />
+                  </MenuTrigger>
+                  <MenuPopover className={styles.menuPopover}>
+                    <MenuList>
+                      {history.map((item, i) => (
+                        <MenuItem 
+                          key={i} 
+                          className={styles.translucentButton}
+                          style={{ border: "none", marginBottom: "2px" }}
+                          onClick={() => handleTemplateChange(item)}
+                        >
+                          {item}
+                        </MenuItem>
+                      ))}
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+              }
+            />
+          </div>
+          
+          <Button
+            className={styles.translucentButton}
+            icon={<CopyRegular />}
+            onClick={handleCopyCommand}
+            title="按模板复制指令"
+          />
+        </div>
+        <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>
+          提示：使用 <code>&lt;id&gt;</code> 代表物品 ID
+        </Caption1>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -270,53 +421,6 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
         <Text style={{ color: tokens.colorNeutralForeground2, lineHeight: "20px" }}>
           {selectedItem.description}
         </Text>
-      </div>
-
-      <Divider />
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <Text weight="semibold">获取指令</Text>
-
-        <div className={styles.commandBox}>
-          <span className={styles.commandLabel}>单人 / 房主 指令</span>
-          <div>{spawnCommand}</div>
-          <Button
-            icon={<CopyRegular />}
-            appearance="secondary"
-            size="small"
-            style={{ alignSelf: "flex-end" }}
-            onClick={() => onCopy(spawnCommand)}
-          >
-            复制指令
-          </Button>
-        </div>
-
-        <div className={styles.commandBox}>
-          <span className={styles.commandLabel}>服务器控制台指令</span>
-          <div>give {selectedItem.id}</div>
-          <Button
-            icon={<CopyRegular />}
-            appearance="secondary"
-            size="small"
-            style={{ alignSelf: "flex-end" }}
-            onClick={() => onCopy(`give ${selectedItem.id}`)}
-          >
-            复制指令
-          </Button>
-        </div>
-      </div>
-
-      <Divider />
-
-      <div style={{ color: tokens.colorNeutralForeground4, fontSize: "12px" }}>
-        <p>💡 提示：</p>
-        <ul style={{ paddingLeft: "16px", margin: "4px 0" }}>
-          <li>
-            <code>@p</code> 代表当前玩家。
-          </li>
-          <li>复制指令后，在游戏聊天框直接按 <code>Ctrl+V</code> 发送即可。</li>
-          <li>如果是服务器后台，请复制控制台指令。</li>
-        </ul>
       </div>
 
       <Divider />

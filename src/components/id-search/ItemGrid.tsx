@@ -6,12 +6,14 @@ import { ItemCard } from "./ItemCard";
 
 const useStyles = makeStyles({
   itemsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-    ...shorthands.gap("12px"),
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    ...shorthands.gap("8px"),
     overflowY: "auto",
     ...shorthands.padding("4px", "4px", "24px", "4px"),
     flex: 1,
+    alignContent: "flex-start",
   },
   emptyState: {
     display: "flex",
@@ -29,6 +31,7 @@ interface ItemGridProps {
   items: UnturnedItem[];
   filteredItems: UnturnedItem[];
   selectedItem: UnturnedItem | null;
+  gamePath?: string | null;
   isLoading: boolean;
   isSyncing: boolean;
   visibleCount: number;
@@ -42,6 +45,7 @@ export const ItemGrid: React.FC<ItemGridProps> = ({
   items,
   filteredItems,
   selectedItem,
+  gamePath,
   isLoading,
   isSyncing,
   visibleCount,
@@ -118,6 +122,7 @@ export const ItemGrid: React.FC<ItemGridProps> = ({
           key={`${item.category}-${item.id}`}
           item={item}
           isSelected={selectedItem?.id === item.id && selectedItem?.category === item.category}
+          gamePath={gamePath}
           onClick={onSelectItem}
         />
       ))}

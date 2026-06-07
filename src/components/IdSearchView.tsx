@@ -156,7 +156,7 @@ const useStyles = makeStyles({
     top: "12px",
     left: "12px",
     right: "12px",
-    zIndex: 100,
+    zIndex: 20000, // Higher than rightPane (10000)
     boxShadow: tokens.shadow16,
   },
   popoverContent: {
@@ -558,6 +558,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             items={items}
             filteredItems={filteredItems}
             selectedItem={selectedItem}
+            gamePath={gamePath}
             isLoading={isLoading}
             isSyncing={isSyncing}
             visibleCount={visibleCount}
@@ -590,6 +591,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         {selectedItem !== null ? (
           <ItemDetailPane
             selectedItem={selectedItem}
+            gamePath={gamePath}
             isSyncing={isSyncing}
             onCopy={handleCopy}
             onSelectItem={setSelectedItem}

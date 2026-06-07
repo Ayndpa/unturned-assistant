@@ -36,6 +36,7 @@ pub fn run() {
             scan_unturned_directory,
             load_cached_index,
             verify_unturned_path,
+            resolve_item_icon,
             fetch_html,
             install_localization_mod,
             uninstall_localization_mod,
