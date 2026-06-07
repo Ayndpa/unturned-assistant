@@ -22,6 +22,11 @@ pub fn map_type_to_category(item_type: &str) -> Option<String> {
         "supply" | "tool" | "fuel" | "filter" | "key" | "box" | "map" | "compass" => {
             Some("resources".to_string())
         }
+        "vehicle_repair_tool" => Some("resources".to_string()),
+        "arrest_end" | "arrest_start" | "cloud" | "detonator" | "farm" | "fisher" | "grower" | "library" | "oil_pump" | "refill" | "tire" | "vehicle_lockpick_tool" | "vehicle_paint_tool" => {
+            Some("resources".to_string())
+        }
+        "optic" => Some("ammo".to_string()),
         _ => None,
     }
 }
