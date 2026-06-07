@@ -5,6 +5,9 @@ import {
   TabList,
   Tab,
   Text,
+  Title2,
+  Body1,
+  Divider,
   makeStyles,
   shorthands,
   tokens,
@@ -17,6 +20,7 @@ import {
   SearchRegular,
   ArrowSyncRegular,
   SettingsRegular,
+  LibraryRegular,
 } from "@fluentui/react-icons";
 import { CATEGORIES, UnturnedItem } from "../utils/types";
 import { invoke } from "@tauri-apps/api/core";
@@ -42,11 +46,18 @@ const useStyles = makeStyles({
     padding: "24px",
     boxSizing: "border-box",
     overflowY: "hidden",
+    ...shorthands.gap("28px"),
+  },
+  pageHeader: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("8px"),
+    marginBottom: "4px",
   },
   rightPane: {
     width: "360px",
     borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "rgba(255, 255, 255, 0.02)", // Very subtle overlay
     padding: "24px",
     display: "flex",
     flexDirection: "column",
@@ -59,7 +70,6 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     ...shorthands.gap("12px"),
-    marginBottom: "16px",
   },
   searchInput: {
     width: "100%",
@@ -181,6 +191,29 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     });
   }, [items, searchQuery, selectedCategory]);
 
+  // Build lookup map by ID and GUID to resolve ingredients quickly
+  const itemMap = useMemo(() => {
+    const map: Record<string, UnturnedItem> = {};
+    items.forEach((item) => {
+      map[item.id.toString()] = item;
+      if (item.guid) {
+        map[item.guid] = item;
+        map[item.guid.toLowerCase()] = item;
+      }
+    });
+    return map;
+  }, [items]);
+
+  const resolveItem = (idOrGuid: string): UnturnedItem | null => {
+    return itemMap[idOrGuid] || itemMap[idOrGuid.toLowerCase()] || null;
+  };
+
+  // Detect if the loaded cache is missing blueprints
+  const isCacheMissingBlueprints = useMemo(() => {
+    if (items.length === 0) return false;
+    return !items.some((item) => item.blueprints && item.blueprints.length > 0);
+  }, [items]);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleSync = async () => {
@@ -288,6 +321,17 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
 
       {/* Left items list pane */}
       <div className={styles.leftPane}>
+        {/* Page header */}
+        <div className={styles.pageHeader}>
+          <Title2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <LibraryRegular /> 物品百科
+          </Title2>
+          <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
+            快速查询 Unturned 物品与载具 ID，查看合成配方、生成指令与详细属性。
+          </Body1>
+          <Divider />
+        </div>
+
         <div className={styles.searchBarContainer}>
           <div style={{ display: "flex", gap: "8px", width: "100%" }}>
             <Input
@@ -318,6 +362,16 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
           </TabList>
         </div>
 
+        {/* Warning Banner if cache has no blueprints */}
+        {isCacheMissingBlueprints && !isSyncing && (
+          <MessageBar intent="warning" style={{ marginBottom: "16px", boxShadow: tokens.shadow4 }}>
+            <MessageBarBody>
+              <MessageBarTitle>需要重建数据索引</MessageBarTitle>
+              检测到当前的本地缓存数据未包含合成配方，请点击右侧的「索引管理」进入数据面板重建索引以解锁配方和用途查询。
+            </MessageBarBody>
+          </MessageBar>
+        )}
+
         {isLoading ? (
           <div className={styles.emptyState} style={{ gap: "16px", padding: "32px", boxSizing: "border-box" }}>
             <Spinner size="huge" label="正在读取本地缓存索引..." labelPosition="below" />
@@ -346,6 +400,9 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             selectedItem={selectedItem}
             isSyncing={isSyncing}
             onCopy={handleCopy}
+            onSelectItem={setSelectedItem}
+            resolveItem={resolveItem}
+            items={items}
           />
         ) : items.length > 0 ? (
           <IndexManagementPane

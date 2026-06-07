@@ -9,12 +9,15 @@ import {
   TabList,
   Tab,
   Text,
-  Spinner
+  Spinner,
+  createLightTheme,
+  createDarkTheme,
+  BrandVariants
 } from "@fluentui/react-components";
+import { invoke } from "@tauri-apps/api/core";
 import {
   HomeRegular,
   LibraryRegular,
-  BookOpenRegular,
   PlayRegular,
   SettingsRegular,
   TranslateRegular,
@@ -26,6 +29,7 @@ import { SettingsView } from "./components/SettingsView";
 import { LocalizationView } from "./components/LocalizationView";
 import { SystemOptimizationView } from "./components/SystemOptimizationView";
 import { TitleBar } from "./components/TitleBar";
+import { GiCargoCrate } from "react-icons/gi";
 import "./App.css";
 
 const useStyles = makeStyles({
@@ -37,19 +41,21 @@ const useStyles = makeStyles({
     height: "100vh",
     width: "100vw",
     overflow: "hidden",
+    backgroundColor: "transparent",
+    position: "relative",
   },
   appContainer: {
     display: "flex",
     flex: 1,
     width: "100%",
     overflow: "hidden",
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: "transparent", // Show acrylic through
     color: tokens.colorNeutralForeground1,
     fontFamily: tokens.fontFamilyBase,
   },
   sidebar: {
     width: "220px",
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--app-sidebar-tint)",
     borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
     display: "flex",
     flexDirection: "column",
@@ -76,12 +82,14 @@ const useStyles = makeStyles({
   },
   tabList: {
     width: "100%",
+    backgroundColor: "transparent",
   },
   tabItem: {
     width: "100%",
     justifyContent: "flex-start",
     height: "40px",
     ...shorthands.margin("4px", "0px"),
+    backgroundColor: "transparent",
   },
   footerSection: {
     ...shorthands.padding("8px", "12px"),
@@ -108,11 +116,101 @@ const useStyles = makeStyles({
   }
 });
 
+// Helper to parse hex color to RGB
+function hexToRgb(hex: string) {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 0, g: 0, b: 0 };
+}
+
+// Helper to convert RGB to hex
+function rgbToHex(r: number, g: number, b: number) {
+  const clamp = (val: number) => Math.max(0, Math.min(255, Math.round(val)));
+  return "#" + ((1 << 24) + (clamp(r) << 16) + (clamp(g) << 8) + clamp(b)).toString(16).slice(1);
+}
+
+// Mix two colors
+function mixColors(color1: {r:number; g:number; b:number}, color2: {r:number; g:number; b:number}, weight: number) {
+  return {
+    r: color1.r * weight + color2.r * (1 - weight),
+    g: color1.g * weight + color2.g * (1 - weight),
+    b: color1.b * weight + color2.b * (1 - weight)
+  };
+}
+
+// Generate BrandVariants from base hex
+function generateBrandVariants(baseHex: string): BrandVariants {
+  const base = hexToRgb(baseHex);
+  const black = { r: 0, g: 0, b: 0 };
+  const white = { r: 255, g: 255, b: 255 };
+
+  const mixWithBlack = (weight: number) => {
+    const mixed = mixColors(base, black, weight);
+    return rgbToHex(mixed.r, mixed.g, mixed.b);
+  };
+
+  const mixWithWhite = (weight: number) => {
+    const mixed = mixColors(base, white, weight);
+    return rgbToHex(mixed.r, mixed.g, mixed.b);
+  };
+
+  return {
+    10: mixWithBlack(0.15),
+    20: mixWithBlack(0.3),
+    30: mixWithBlack(0.5),
+    40: mixWithBlack(0.65),
+    50: mixWithBlack(0.8),
+    60: baseHex,
+    70: mixWithWhite(0.85),
+    80: mixWithWhite(0.7),
+    90: mixWithWhite(0.55),
+    100: mixWithWhite(0.4),
+    110: mixWithWhite(0.3),
+    120: mixWithWhite(0.2),
+    130: mixWithWhite(0.12),
+    140: mixWithWhite(0.07),
+    150: mixWithWhite(0.03),
+    160: mixWithWhite(0.01)
+  };
+}
+
 function App() {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState("home");
   const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">("system");
+  const [themeColor, setThemeColor] = useState<string>("windows");
+  const [windowsColor, setWindowsColor] = useState<string>("#0078d4");
   const [isDark, setIsDark] = useState(false);
+
+  // Load theme configuration on mount
+  useEffect(() => {
+    const savedColor = localStorage.getItem("theme_color");
+    if (savedColor) {
+      setThemeColor(savedColor);
+    }
+    const savedMode = localStorage.getItem("theme_mode") as "light" | "dark" | "system";
+    if (savedMode) {
+      setThemeMode(savedMode);
+    }
+  }, []);
+
+  // Fetch Windows accent color when "windows" theme is active
+  useEffect(() => {
+    if (themeColor === "windows") {
+      invoke<string>("get_windows_accent_color")
+        .then((color) => {
+          setWindowsColor(color);
+        })
+        .catch((err) => {
+          console.error("Failed to get Windows accent color:", err);
+        });
+    }
+  }, [themeColor]);
 
   // Determine system theme preference
   useEffect(() => {
@@ -131,7 +229,28 @@ function App() {
     }
   }, [themeMode]);
 
-  const currentTheme = isDark ? webDarkTheme : webLightTheme;
+  const handleThemeModeChange = (mode: "light" | "dark" | "system") => {
+    setThemeMode(mode);
+    localStorage.setItem("theme_mode", mode);
+  };
+
+  const handleThemeColorChange = (color: string) => {
+    setThemeColor(color);
+    localStorage.setItem("theme_color", color);
+  };
+
+  let currentTheme = isDark ? webDarkTheme : webLightTheme;
+
+  const activeColor = themeColor === "windows" ? windowsColor : themeColor;
+
+  if (activeColor && activeColor !== "#0078d4") {
+    try {
+      const brand = generateBrandVariants(activeColor);
+      currentTheme = isDark ? createDarkTheme(brand) : createLightTheme(brand);
+    } catch (err) {
+      console.error("Failed to generate brand variants:", err);
+    }
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -144,14 +263,21 @@ function App() {
       case "ime-compatibility":
         return <SystemOptimizationView />;
       case "settings":
-        return <SettingsView themeMode={themeMode} onChangeThemeMode={setThemeMode} />;
-      case "crafting":
+        return (
+          <SettingsView
+            themeMode={themeMode}
+            onChangeThemeMode={handleThemeModeChange}
+            themeColor={themeColor}
+            onChangeThemeColor={handleThemeColorChange}
+            currentSystemColor={windowsColor}
+          />
+        );
       case "maps":
         return (
           <div className={styles.loadingContainer}>
             <Spinner size="huge" label="正在建设中..." labelPosition="below" />
             <Text style={{ color: tokens.colorNeutralForeground4, marginTop: "8px" }}>
-              敬请期待！下一个版本将为您带来{activeTab === "crafting" ? "合成指南" : "高清地图雷达"}。
+              敬请期待！下一个版本将为您带来高清地图雷达。
             </Text>
           </div>
         );
@@ -161,15 +287,15 @@ function App() {
   };
 
   return (
-    <FluentProvider theme={currentTheme}>
-      <div className={styles.rootContainer}>
+    <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
+      <div className={`${styles.rootContainer} app-acrylic-shell`} data-theme={isDark ? "dark" : "light"}>
         <TitleBar />
         <div className={styles.appContainer}>
           {/* Navigation Sidebar */}
           <aside className={styles.sidebar}>
             <div>
               <div className={styles.logoSection}>
-                <LibraryRegular className={styles.logoIcon} />
+                <GiCargoCrate className={styles.logoIcon} style={{ fontSize: "26px" }} />
                 <Text size={400} className={styles.logoText}>Unturned 助手</Text>
               </div>
               
@@ -178,7 +304,7 @@ function App() {
                   vertical
                   selectedValue={activeTab}
                   onTabSelect={(_, data) => setActiveTab(data.value as string)}
-                  className={styles.tabList}
+                  className={`${styles.tabList} sidebar-tablist`}
                 >
                   <Tab 
                     value="home" 
@@ -192,14 +318,7 @@ function App() {
                     icon={<LibraryRegular />}
                     className={styles.tabItem}
                   >
-                    物品ID查询
-                  </Tab>
-                  <Tab 
-                    value="crafting" 
-                    icon={<BookOpenRegular />}
-                    className={styles.tabItem}
-                  >
-                    合成手册
+                    物品百科
                   </Tab>
                   <Tab 
                     value="maps" 

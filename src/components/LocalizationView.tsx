@@ -12,11 +12,13 @@ import {
   MessageBarBody,
   MessageBarTitle,
   Text,
+  Divider,
 } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   SearchRegular,
   InfoRegular,
+  TranslateRegular,
 } from "@fluentui/react-icons";
 import { invoke } from "@tauri-apps/api/core";
 import { LocalizationItem } from "./localization/types";
@@ -30,31 +32,17 @@ const useStyles = makeStyles({
   container: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("20px"),
+    ...shorthands.gap("28px"),
     padding: "24px",
     height: "100%",
     boxSizing: "border-box",
     overflowY: "auto",
   },
-  headerBanner: {
+  pageHeader: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "center",
-    backgroundImage: "linear-gradient(135deg, #107c41 0%, #1f9a55 100%)",
-    color: "#ffffff",
-    padding: "24px 32px",
-    borderRadius: tokens.borderRadiusXLarge,
-    boxShadow: tokens.shadow16,
-    flexShrink: 0,
-  },
-  bannerTitle: {
-    color: "#ffffff",
-    fontWeight: "bold",
+    ...shorthands.gap("8px"),
     marginBottom: "4px",
-  },
-  bannerSubtitle: {
-    color: "rgba(255, 255, 255, 0.9)",
-    maxWidth: "600px",
   },
   searchBarRow: {
     display: "flex",
@@ -233,12 +221,15 @@ export const LocalizationView: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      {/* Banner */}
-      <div className={styles.headerBanner}>
-        <Title2 className={styles.bannerTitle}>汉化补丁一键下载与安装</Title2>
-        <Body1 className={styles.bannerSubtitle}>
-          从《未转变者中文社区》API 服务器实时获取最新可用的汉化补丁，一键下载并自动解压覆盖到游戏根目录，告别繁琐的手动替换。
+      {/* Page header */}
+      <div className={styles.pageHeader}>
+        <Title2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <TranslateRegular /> 汉化补丁
+        </Title2>
+        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
+          从《未转变者中文社区》API 服务器实时获取最新可用的汉化补丁，一键下载并自动解压覆盖到游戏根目录。
         </Body1>
+        <Divider />
       </div>
 
       {/* Status card */}

@@ -1,9 +1,26 @@
+export interface BlueprintItem {
+  idOrGuid: string;
+  amount: number;
+  isTool: boolean;
+}
+
+export interface Blueprint {
+  inputs: BlueprintItem[];
+  outputs: BlueprintItem[];
+  typeOrCategory: string;
+  skill?: string;
+  skillLevel?: number;
+  mapIndex?: number;
+}
+
 export interface UnturnedItem {
   id: number;
+  guid?: string;
   name: string;
   category: 'weapons' | 'ammo' | 'apparel' | 'vehicles' | 'medical' | 'structures' | 'other';
   description: string;
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary' | 'Mythical';
+  blueprints?: Blueprint[];
 }
 
 export const CATEGORIES = [

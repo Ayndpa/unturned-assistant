@@ -9,9 +9,9 @@ import {
   SubtractRegular, 
   SquareRegular, 
   DismissRegular,
-  WindowMultipleRegular,
-  LibraryRegular
+  WindowMultipleRegular
 } from "@fluentui/react-icons";
+import { GiCargoCrate } from "react-icons/gi";
 
 const useStyles = makeStyles({
   titleBar: {
@@ -19,7 +19,7 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--app-titlebar-tint)",
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     userSelect: "none",
     position: "relative",
@@ -61,10 +61,10 @@ const useStyles = makeStyles({
     transitionProperty: "background-color, color",
     transitionDuration: "0.1s",
     "&:hover": {
-      backgroundColor: tokens.colorNeutralBackground3Hover,
+      backgroundColor: "var(--app-control-hover)",
     },
     "&:active": {
-      backgroundColor: tokens.colorNeutralBackground3Pressed,
+      backgroundColor: "var(--app-control-pressed)",
     }
   },
   closeButton: {
@@ -147,7 +147,7 @@ export const TitleBar: React.FC = () => {
     <div className={styles.titleBar}>
       {/* Draggable drag region */}
       <div className={styles.dragRegion} data-tauri-drag-region>
-        <LibraryRegular className={styles.logoIcon} />
+        <GiCargoCrate className={styles.logoIcon} style={{ fontSize: "16px" }} />
         <Text className={styles.titleText}>Unturned 游戏助手</Text>
       </div>
 

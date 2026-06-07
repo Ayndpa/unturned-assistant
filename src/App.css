@@ -7,10 +7,104 @@ body, html, #root {
   overflow: hidden;
   user-select: none; /* Prevent text selection like a native app */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: transparent !important;
+}
+
+body {
+  --app-acrylic-tint: rgba(249, 249, 249, 0.1);
+  --app-sidebar-tint: rgba(243, 243, 243, 0.1);
+  --app-titlebar-tint: rgba(249, 249, 249, 0.05);
+  --app-control-hover: rgba(0, 0, 0, 0.06);
+  --app-control-pressed: rgba(0, 0, 0, 0.10);
+}
+
+.app-acrylic-shell {
+  isolation: isolate;
+}
+
+.app-acrylic-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--app-acrylic-tint), var(--app-acrylic-tint)),
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.05), transparent 30%),
+    radial-gradient(circle at 80% 12%, rgba(0, 120, 212, 0.02), transparent 34%);
+}
+
+.app-acrylic-shell[data-theme="dark"] {
+  --app-acrylic-tint: rgba(28, 28, 28, 0.45);
+  --app-sidebar-tint: rgba(0, 0, 0, 0.15); /* 这里使用纯黑叠加，让原本的 28 灰度稍微加深一点，更协调 */
+  --app-titlebar-tint: rgba(0, 0, 0, 0.05);
+  --app-control-hover: rgba(255, 255, 255, 0.08);
+  --app-control-pressed: rgba(255, 255, 255, 0.12);
+}
+
+/* Ensure Fluent UI provider doesn't block Acrylic */
+.fui-FluentProvider {
+  background-color: transparent !important;
+}
+
+/* Global Component Transparency Overrides */
+.fui-Card, 
+.fui-CardPreview,
+.fui-AccordionItem,
+.fui-Input,
+.fui-Input__input,
+.fui-Button:not(.fui-Button--primary),
+.fui-MenuPopover,
+.fui-DialogSurface {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(4px);
+}
+
+.fui-TabList, 
+.fui-Tab {
+  background-color: transparent !important;
+}
+
+.sidebar-tablist {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .fui-Card,
+[data-theme="dark"] .fui-CardPreview,
+[data-theme="dark"] .fui-Input,
+[data-theme="dark"] .fui-Input__input,
+[data-theme="dark"] .fui-Button:not(.fui-Button--primary) {
+  background-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Specific view headers and sections */
+header, 
+.fui-TitleBar,
+[class*="header"], 
+[class*="Header"],
+[class*="pane"],
+[class*="Pane"] {
+  background-color: transparent !important;
+}
+
+/* Custom card backgrounds in specific views if any */
+.hero-card, .mod-card, .item-card {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] .hero-card, 
+[data-theme="dark"] .mod-card, 
+[data-theme="dark"] .item-card {
+  background-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 code {
   font-family: Consolas, Monaco, monospace;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
 /* Custom scrollbars matching modern Fluent UI scrollbars */
@@ -30,4 +124,68 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 100, 100, 0.5);
+}
+
+/* Floating Animations for Home View Hero Graphic */
+@keyframes float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes floatSlow {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(6px) rotate(-1deg);
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes shadowScale {
+  0% {
+    transform: scale(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: scale(0.8);
+    opacity: 0.08;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.18;
+  }
+}
+
+.hero-graphic-crate {
+  animation: float 4s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.hero-graphic-shadow {
+  animation: shadowScale 4s ease-in-out infinite;
+}
+
+.hero-graphic-cube-blue {
+  animation: floatSlow 3s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.hero-graphic-cube-teal {
+  animation: float 4.5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.hero-graphic-cube-purple {
+  animation: floatSlow 5s ease-in-out infinite;
+  transform-origin: center center;
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Text,
   Badge,
@@ -10,8 +10,9 @@ import {
   makeStyles,
   shorthands,
   tokens,
+  Card,
 } from "@fluentui/react-components";
-import { CopyRegular, ClipboardRegular } from "@fluentui/react-icons";
+import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular } from "@fluentui/react-icons";
 import { CATEGORIES, RARITY_COLORS, UnturnedItem } from "../../utils/types";
 
 const useStyles = makeStyles({
@@ -67,14 +68,129 @@ interface ItemDetailPaneProps {
   selectedItem: UnturnedItem | null;
   isSyncing: boolean;
   onCopy: (command: string) => void;
+  onSelectItem?: (item: UnturnedItem) => void;
+  resolveItem?: (idOrGuid: string) => UnturnedItem | null;
+  items?: UnturnedItem[];
 }
 
 export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
   selectedItem,
   isSyncing,
   onCopy,
+  onSelectItem,
+  resolveItem,
+  items = [],
 }) => {
   const styles = useStyles();
+
+  // Find recipes where this item is used as an input
+  const usages = useMemo(() => {
+    if (!selectedItem || !items) return [];
+    const itemIdStr = selectedItem.id.toString();
+    const itemGuid = selectedItem.guid;
+
+    return items.filter((item) => {
+      if (!item.blueprints) return false;
+      return item.blueprints.some((bp) => {
+        return bp.inputs.some((input) => {
+          return (
+            input.idOrGuid === itemIdStr ||
+            (itemGuid && input.idOrGuid.toLowerCase() === itemGuid.toLowerCase())
+          );
+        });
+      });
+    });
+  }, [selectedItem, items]);
+
+  // Helper to parse bilingual names (e.g. "English (Chinese)")
+  const getBilingualNames = (fullName: string) => {
+    const nameMatch = fullName.match(/^(.*?)\s*\((.*?)\)$/);
+    if (nameMatch) {
+      return { primary: nameMatch[2], secondary: nameMatch[1] }; // Chinese, English
+    }
+    return { primary: fullName, secondary: "" };
+  };
+
+  // Render clickable ingredient / output button
+  const renderItemButton = (
+    idOrGuid: string,
+    amount: number,
+    isTool: boolean
+  ) => {
+    const targetItem = resolveItem ? resolveItem(idOrGuid) : null;
+    if (!targetItem) {
+      return (
+        <Button
+          key={idOrGuid}
+          appearance="outline"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            textAlign: "left",
+            width: "100%",
+            padding: "8px 12px",
+            height: "auto",
+            gap: "8px",
+            marginBottom: "6px",
+          }}
+          icon={<InfoRegular />}
+          disabled
+        >
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <Text weight="semibold" style={{ fontSize: "13px" }}>未知物品 ({idOrGuid})</Text>
+            <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>
+              {isTool ? "工具 (不消耗)" : `数量: ${amount}`}
+            </Caption1>
+          </div>
+        </Button>
+      );
+    }
+
+    const { primary, secondary } = getBilingualNames(targetItem.name);
+    const rColor = RARITY_COLORS[targetItem.rarity];
+
+    return (
+      <Button
+        key={`${targetItem.id}-${idOrGuid}`}
+        appearance="subtle"
+        onClick={() => onSelectItem && onSelectItem(targetItem)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          textAlign: "left",
+          width: "100%",
+          padding: "8px 12px",
+          height: "auto",
+          gap: "8px",
+          borderLeft: `3px solid ${rColor.color}`,
+          backgroundColor: tokens.colorNeutralBackground3,
+          boxShadow: tokens.shadow2,
+          marginBottom: "6px",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Text weight="semibold" style={{ fontSize: "13px" }}>
+              {primary}
+            </Text>
+            <Text size={100} style={{ color: tokens.colorNeutralForeground4, fontWeight: "bold" }}>
+              #{targetItem.id}
+            </Text>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, fontStyle: secondary ? "italic" : "normal" }}>
+              {secondary || targetItem.rarity}
+            </Caption1>
+            <Badge size="small" appearance="filled" color={isTool ? "brand" : "subtle"}>
+              {isTool ? "工具 (不消耗)" : `数量: x${amount}`}
+            </Badge>
+          </div>
+        </div>
+      </Button>
+    );
+  };
 
   if (isSyncing) {
     return (
@@ -101,8 +217,10 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
   const spawnCommand = `@give @p/${selectedItem.id}/1`;
 
+  const bilingualNames = getBilingualNames(selectedItem.name);
+
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       <div className={styles.detailHeader}>
         <Caption1
           style={{
@@ -113,7 +231,12 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
         >
           物品详情
         </Caption1>
-        <Title3>{selectedItem.name}</Title3>
+        <Title3>{bilingualNames.primary}</Title3>
+        {bilingualNames.secondary && (
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, display: "block", fontStyle: "italic", marginTop: "-4px" }}>
+            {bilingualNames.secondary}
+          </Text>
+        )}
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
           <span
@@ -193,6 +316,102 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           <li>如果是服务器后台，请复制控制台指令。</li>
         </ul>
       </div>
-    </>
+
+      <Divider />
+
+      {/* Synthesize Recipes (How to craft) */}
+      <div>
+        <Text weight="semibold" style={{ display: "block", marginBottom: "10px" }}>
+          🔨 合成配方 (如何制作)
+        </Text>
+
+        {selectedItem.blueprints && selectedItem.blueprints.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {selectedItem.blueprints.map((bp, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: tokens.colorNeutralBackground1,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  borderRadius: tokens.borderRadiusMedium,
+                  padding: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {/* Recipe Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Badge appearance="outline" color="brand">
+                    配方 {selectedItem.blueprints!.length > 1 ? `#${index + 1}` : ""}
+                  </Badge>
+                  {bp.skill && (
+                    <Badge appearance="tint" color="warning" icon={<WrenchRegular />}>
+                      技能: {bp.skill}
+                    </Badge>
+                  )}
+                  {bp.typeOrCategory && bp.typeOrCategory !== "Barricade" && bp.typeOrCategory !== "Tool" && bp.typeOrCategory !== "Supply" && (
+                    <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>
+                      {bp.typeOrCategory}
+                    </Caption1>
+                  )}
+                </div>
+
+                {/* Inputs */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground4, marginBottom: "6px", fontWeight: "bold" }}>
+                    所需材料：
+                  </Caption1>
+                  {bp.inputs.map((input) =>
+                    renderItemButton(input.idOrGuid, input.amount, input.isTool)
+                  )}
+                </div>
+
+                {/* Output indicator if multiple or different amount */}
+                {bp.outputs.length > 0 && (bp.outputs[0].amount > 1 || bp.outputs[0].idOrGuid !== selectedItem.id.toString()) && (
+                  <div style={{ display: "flex", flexDirection: "column", borderTop: `1px dashed ${tokens.colorNeutralStroke2}`, paddingTop: "8px", marginTop: "4px" }}>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground4, marginBottom: "6px", fontWeight: "bold" }}>
+                      合成产物：
+                    </Caption1>
+                    {bp.outputs.map((out) =>
+                      renderItemButton(out.idOrGuid, out.amount, false)
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Card style={{ backgroundColor: tokens.colorNeutralBackground3, padding: "12px", border: "none" }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
+              该物品无法直接合成。（这通常是基础材料或地图自然刷新物品，如废金属、原木等）
+            </Text>
+          </Card>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* Downstream Usages (What this crafts) */}
+      <div>
+        <Text weight="semibold" style={{ display: "block", marginBottom: "10px" }}>
+          💡 物品用途 (可合成什么)
+        </Text>
+
+        {usages.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {usages.map((usageItem) =>
+              renderItemButton(usageItem.id.toString(), 1, false)
+            )}
+          </div>
+        ) : (
+          <Card style={{ backgroundColor: tokens.colorNeutralBackground3, padding: "12px", border: "none" }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
+              该物品暂无其他合成配方用途。
+            </Text>
+          </Card>
+        )}
+      </div>
+    </div>
   );
 };

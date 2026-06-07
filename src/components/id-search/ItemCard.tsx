@@ -1,5 +1,5 @@
 import React from "react";
-import { Card, Text, makeStyles, shorthands, tokens, mergeClasses } from "@fluentui/react-components";
+import { Card, Text, Badge, makeStyles, shorthands, tokens, mergeClasses } from "@fluentui/react-components";
 import { RARITY_COLORS, UnturnedItem } from "../../utils/types";
 
 const useStyles = makeStyles({
@@ -96,17 +96,25 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, onClick })
 
         {/* Content Row: Names */}
         <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <Text
-            weight="bold"
-            style={{
-              fontSize: "14px",
-              lineHeight: "1.3",
-              color: tokens.colorNeutralForeground1,
-              wordBreak: "break-all",
-            }}
-          >
-            {primaryName}
-          </Text>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Text
+              weight="bold"
+              style={{
+                fontSize: "14px",
+                lineHeight: "1.3",
+                color: tokens.colorNeutralForeground1,
+                wordBreak: "break-all",
+                flex: 1,
+              }}
+            >
+              {primaryName}
+            </Text>
+            {item.blueprints && item.blueprints.length > 0 && (
+              <Badge size="small" appearance="tint" color="brand" title={`${item.blueprints.length} 个合成配方`} style={{ marginLeft: "4px", flexShrink: 0 }}>
+                制作
+              </Badge>
+            )}
+          </div>
           {secondaryName && (
             <Text
               size={100}

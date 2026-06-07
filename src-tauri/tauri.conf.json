@@ -12,10 +12,12 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Unturned 游戏助手",
         "width": 1100,
         "height": 750,
-        "decorations": false
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {
