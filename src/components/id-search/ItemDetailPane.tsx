@@ -37,7 +37,8 @@ const useStyles = makeStyles({
     color: tokens.colorBrandForeground1,
   },
   commandBox: {
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(4px)",
     ...shorthands.padding("12px"),
     borderRadius: tokens.borderRadiusMedium,
     fontFamily: "Consolas, Monaco, monospace",
@@ -165,7 +166,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           height: "auto",
           gap: "8px",
           borderLeft: `3px solid ${rColor.color}`,
-          backgroundColor: tokens.colorNeutralBackground3,
+          backgroundColor: "rgba(255, 255, 255, 0.03)",
+          backdropFilter: "blur(4px)",
           boxShadow: tokens.shadow2,
           marginBottom: "6px",
         }}
@@ -331,7 +333,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
               <div
                 key={index}
                 style={{
-                  backgroundColor: tokens.colorNeutralBackground1,
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  backdropFilter: "blur(4px)",
                   border: `1px solid ${tokens.colorNeutralStroke2}`,
                   borderRadius: tokens.borderRadiusMedium,
                   padding: "12px",
@@ -382,7 +385,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
             ))}
           </div>
         ) : (
-          <Card style={{ backgroundColor: tokens.colorNeutralBackground3, padding: "12px", border: "none" }}>
+          <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
               该物品无法直接合成。（这通常是基础材料或地图自然刷新物品，如废金属、原木等）
             </Text>
@@ -405,7 +408,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
             )}
           </div>
         ) : (
-          <Card style={{ backgroundColor: tokens.colorNeutralBackground3, padding: "12px", border: "none" }}>
+          <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
               该物品暂无其他合成配方用途。
             </Text>

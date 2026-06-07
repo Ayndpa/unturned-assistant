@@ -21,6 +21,7 @@ import {
   ArrowSyncRegular,
   SettingsRegular,
   LibraryRegular,
+  DismissRegular
 } from "@fluentui/react-icons";
 import { CATEGORIES, UnturnedItem } from "../utils/types";
 import { invoke } from "@tauri-apps/api/core";
@@ -37,6 +38,7 @@ const useStyles = makeStyles({
     height: "100%",
     width: "100%",
     boxSizing: "border-box",
+    position: "relative",
   },
   leftPane: {
     display: "flex",
@@ -53,6 +55,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("8px"),
     marginBottom: "4px",
+    flexShrink: 0,
   },
   rightPane: {
     width: "360px",
@@ -65,6 +68,61 @@ const useStyles = makeStyles({
     height: "100%",
     overflowY: "auto",
     ...shorthands.gap("16px"),
+    zIndex: 10000,
+    transitionProperty: "transform, opacity",
+    transitionDuration: "0.2s",
+    transitionTimingFunction: "ease",
+    "@media (max-width: 1200px)": {
+      position: "absolute",
+      right: "0",
+      top: "0",
+      bottom: "0",
+      width: "100%",
+      maxWidth: "400px",
+      backgroundColor: "var(--app-sidebar-tint-solid, rgba(240, 240, 240, 0.95))",
+      backdropFilter: "blur(40px)",
+      boxShadow: tokens.shadow16,
+      transform: "translateX(100%)",
+      opacity: 0,
+      pointerEvents: "none",
+      borderLeft: `1px solid ${tokens.colorNeutralStroke1}`,
+    }
+  },
+  rightPaneOpen: {
+    "@media (max-width: 1200px)": {
+      transform: "translateX(0)",
+      opacity: 1,
+      pointerEvents: "auto",
+    }
+  },
+  rightPaneOverlay: {
+    display: "none",
+    "@media (max-width: 1200px)": {
+      display: "block",
+      position: "absolute",
+      inset: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.2)",
+      backdropFilter: "blur(2px)",
+      zIndex: 9000,
+      opacity: 0,
+      pointerEvents: "none",
+      transitionProperty: "opacity",
+      transitionDuration: "0.2s",
+    }
+  },
+  rightPaneOverlayVisible: {
+    "@media (max-width: 1200px)": {
+      opacity: 1,
+      pointerEvents: "auto",
+    }
+  },
+  closeButtonRow: {
+    display: "none",
+    "@media (max-width: 1200px)": {
+      display: "flex",
+      justifyContent: "flex-end",
+      marginBottom: "8px",
+    }
   },
   searchBarContainer: {
     display: "flex",
@@ -117,6 +175,26 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const [showCopyAlert, setShowCopyAlert] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState("");
   const [visibleCount, setVisibleCount] = useState(50);
+  const [isRightPaneOpen, setIsRightPaneOpen] = useState(false);
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth > 1200);
+
+  // Responsive listener
+  useEffect(() => {
+    const handleResize = () => {
+      const large = window.innerWidth > 1200;
+      setIsLargeScreen(large);
+      if (large) setIsRightPaneOpen(false);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Automatically open right pane when an item is selected or management pane is shown (if not on large screen)
+  useEffect(() => {
+    if (!isLargeScreen && selectedItem) {
+      setIsRightPaneOpen(true);
+    }
+  }, [selectedItem, isLargeScreen]);
 
   // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -303,6 +381,13 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     </div>
   );
 
+  const onSelectItem = (item: UnturnedItem) => {
+    setSelectedItem(item);
+    if (!isLargeScreen) {
+      setIsRightPaneOpen(true);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -344,7 +429,10 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             />
             <Button
               icon={<ArrowSyncRegular />}
-              onClick={() => setSelectedItem(null)}
+              onClick={() => {
+                setSelectedItem(null);
+                if (!isLargeScreen) setIsRightPaneOpen(true);
+              }}
               title="查看数据索引统计与管理"
             >
               索引管理
@@ -386,15 +474,32 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             isLoading={isLoading}
             isSyncing={isSyncing}
             visibleCount={visibleCount}
-            onSelectItem={setSelectedItem}
+            onSelectItem={onSelectItem}
             onLoadMore={() => setVisibleCount((prev) => Math.min(prev + 50, filteredItems.length))}
             resetDeps={[searchQuery, selectedCategory, items] as const}
           />
         )}
       </div>
 
+      {/* Right Pane Overlay (Mobile) */}
+      <div 
+        className={`${styles.rightPaneOverlay} ${isRightPaneOpen ? styles.rightPaneOverlayVisible : ""}`}
+        onClick={() => setIsRightPaneOpen(false)}
+      />
+
       {/* Right details / management pane */}
-      <div className={styles.rightPane}>
+      <div className={`${styles.rightPane} ${isRightPaneOpen ? styles.rightPaneOpen : ""}`}>
+        {/* Mobile Close Button */}
+        <div className={styles.closeButtonRow}>
+          <Button
+            appearance="subtle"
+            icon={<DismissRegular />}
+            onClick={() => setIsRightPaneOpen(false)}
+          >
+            关闭详情
+          </Button>
+        </div>
+
         {selectedItem !== null ? (
           <ItemDetailPane
             selectedItem={selectedItem}

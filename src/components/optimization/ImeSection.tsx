@@ -14,6 +14,7 @@ import {
   MessageBarTitle,
   Text,
   Switch,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   KeyboardRegular,
@@ -42,21 +43,26 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     ...shorthands.padding("20px"),
+    flexShrink: 0,
   },
   statusHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    ...shorthands.gap("12px"),
     marginBottom: "8px",
   },
   statusIndicator: {
     display: "flex",
     alignItems: "center",
     ...shorthands.gap("8px"),
+    flexShrink: 1,
   },
   statusTitle: {
     fontWeight: tokens.fontWeightSemibold,
     fontSize: "16px",
+    lineHeight: "1.4",
   },
   registryCode: {
     backgroundColor: tokens.colorNeutralBackground3,
@@ -65,10 +71,12 @@ const useStyles = makeStyles({
     fontFamily: "monospace",
     fontSize: "11px",
     color: tokens.colorNeutralForeground3,
+    wordBreak: "break-all",
   },
   explainerCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
+    flexShrink: 0,
   },
   bulletList: {
     paddingLeft: "20px",
@@ -85,6 +93,9 @@ const useStyles = makeStyles({
     flexWrap: "wrap",
     ...shorthands.gap("12px"),
     marginTop: "16px",
+    ...shorthands.padding("12px", "16px"),
+    ...shorthands.margin("16px", "-20px", "-20px", "-20px"),
+    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
   },
 });
 
@@ -230,7 +241,7 @@ export const ImeSection: React.FC = () => {
               </MessageBar>
             )}
 
-            <div className={styles.actionRow}>
+            <div className={mergeClasses(styles.actionRow, "card-actions-area")}>
               <Button
                 appearance="primary"
                 icon={<ArrowClockwiseRegular />}

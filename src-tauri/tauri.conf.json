@@ -16,6 +16,8 @@
         "title": "Unturned 游戏助手",
         "width": 1100,
         "height": 750,
+        "minWidth": 800,
+        "minHeight": 600,
         "decorations": false,
         "transparent": true
       }
@@ -33,6 +35,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "languages": [
+          "SimpChinese"
+        ]
+      },
+      "wix": {
+        "language": [
+          "zh-CN"
+        ]
+      }
+    }
   }
 }

@@ -65,7 +65,8 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
       {/* Status card */}
       <Card
         style={{
-          backgroundColor: tokens.colorNeutralBackground3,
+          backgroundColor: "rgba(255, 255, 255, 0.05)",
+          backdropFilter: "blur(4px)",
           padding: "12px",
           borderLeft: `4px solid ${tokens.colorPaletteGreenBorder2}`,
         }}
@@ -88,9 +89,11 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           style={{
             color: tokens.colorNeutralForeground3,
             wordBreak: "break-all",
-            backgroundColor: tokens.colorNeutralBackground3,
+            backgroundColor: "rgba(255, 255, 255, 0.05)",
+            backdropFilter: "blur(4px)",
             padding: "8px",
             borderRadius: "4px",
+            border: `1px solid ${tokens.colorNeutralStroke3}`,
           }}
         >
           <code>{gamePath || "未配置"}</code>

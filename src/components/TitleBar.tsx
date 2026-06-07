@@ -20,10 +20,11 @@ const useStyles = makeStyles({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "var(--app-titlebar-tint)",
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     userSelect: "none",
     position: "relative",
     zIndex: 1000,
+    flexShrink: 0,
   },
   dragRegion: {
     flex: 1,

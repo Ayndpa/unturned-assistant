@@ -10,6 +10,7 @@ import {
   MessageBar,
   MessageBarBody,
   Badge,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   CheckmarkCircleRegular,
@@ -27,20 +28,39 @@ const useStyles = makeStyles({
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    ...shorthands.gap("12px"),
     marginBottom: "12px",
+  },
+  statusBadge: {
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
   },
   statusDetails: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("6px"),
+    ...shorthands.gap("8px"),
     color: tokens.colorNeutralForeground2,
     fontSize: "13px",
   },
   bold: {
     fontWeight: "bold",
+    wordBreak: "break-all",
   },
   infoLabel: {
     color: tokens.colorNeutralForeground4,
+  },
+  actionRow: {
+    marginTop: "16px",
+    display: "flex",
+    gap: "12px",
+    ...shorthands.padding("12px", "16px"),
+    ...shorthands.margin("16px", "-16px", "-16px", "-16px"),
+    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
   },
 });
 
@@ -70,11 +90,17 @@ export const LocalizationStatusCard: React.FC<LocalizationStatusCardProps> = ({
       <div className={styles.statusHeader}>
         <Title3>本地汉化状态</Title3>
         {isInstalled ? (
-          <Badge color="success" icon={<CheckmarkCircleRegular />}>
-            已检测到汉化补丁 {installedMod && `(${installedMod})`}
+          <Badge 
+            color="success" 
+            icon={<CheckmarkCircleRegular />} 
+            className={styles.statusBadge}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              已检测到汉化补丁 {installedMod && `(${installedMod})`}
+            </span>
           </Badge>
         ) : (
-          <Badge color="warning">未检测到汉化</Badge>
+          <Badge color="warning" className={styles.statusBadge}>未检测到汉化</Badge>
         )}
       </div>
 
@@ -82,15 +108,15 @@ export const LocalizationStatusCard: React.FC<LocalizationStatusCardProps> = ({
         <div>
           <span className={styles.infoLabel}>Unturned 根目录：</span>
           <span className={styles.bold}>{gamePath || "未配置"}</span>
-          <span
+          <div
             style={{
               color: tokens.colorNeutralForeground4,
-              marginLeft: "12px",
+              marginTop: "4px",
               fontSize: "12px",
             }}
           >
             (下载的汉化包将自动解压并覆盖安装至此根目录下)
-          </span>
+          </div>
         </div>
         <div>
           <span className={styles.infoLabel}>状态检测：</span>
@@ -114,10 +140,10 @@ export const LocalizationStatusCard: React.FC<LocalizationStatusCardProps> = ({
         </div>
       </div>
 
-      <div style={{ marginTop: "16px", display: "flex", gap: "12px" }}>
+      <div className={mergeClasses(styles.actionRow, "card-actions-area")}>
         {isInstalled && (
           <Button
-            appearance="secondary"
+            appearance="primary"
             icon={<DeleteRegular />}
             onClick={onUninstall}
             disabled={!gamePath || !!actionStatus}

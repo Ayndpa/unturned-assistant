@@ -43,6 +43,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("8px"),
     marginBottom: "4px",
+    flexShrink: 0,
   },
   searchBarRow: {
     display: "flex",
@@ -50,13 +51,15 @@ const useStyles = makeStyles({
     ...shorthands.gap("12px"),
     width: "100%",
     flexShrink: 0,
+    flexWrap: "wrap",
   },
   searchInput: {
     flex: 1,
+    minWidth: "200px",
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     ...shorthands.gap("16px"),
     marginTop: "8px",
   },

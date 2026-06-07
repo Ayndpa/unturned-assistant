@@ -10,7 +10,7 @@ const useStyles = makeStyles({
     gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
     ...shorthands.gap("12px"),
     overflowY: "auto",
-    paddingBottom: "24px",
+    ...shorthands.padding("4px", "4px", "24px", "4px"),
     flex: 1,
   },
   emptyState: {

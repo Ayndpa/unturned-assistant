@@ -14,6 +14,7 @@ import {
   Text,
   Badge,
   ProgressBar,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   StorageRegular,
@@ -49,25 +50,31 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     ...shorthands.padding("20px"),
+    flexShrink: 0,
   },
   statusHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    ...shorthands.gap("12px"),
     marginBottom: "8px",
   },
   statusIndicator: {
     display: "flex",
     alignItems: "center",
     ...shorthands.gap("8px"),
+    flexShrink: 1,
   },
   statusTitle: {
     fontWeight: tokens.fontWeightSemibold,
     fontSize: "16px",
+    lineHeight: "1.4",
   },
   explainerCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
+    flexShrink: 0,
   },
   bulletList: {
     paddingLeft: "20px",
@@ -84,6 +91,9 @@ const useStyles = makeStyles({
     flexWrap: "wrap",
     ...shorthands.gap("12px"),
     marginTop: "16px",
+    ...shorthands.padding("12px", "16px"),
+    ...shorthands.margin("16px", "-20px", "-20px", "-20px"),
+    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
   },
   diskList: {
     display: "flex",
@@ -96,7 +106,8 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("4px"),
     ...shorthands.padding("12px", "16px"),
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(4px)",
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     transitionProperty: "border-color",
@@ -104,7 +115,7 @@ const useStyles = makeStyles({
   },
   diskItemRecommended: {
     border: `1.5px solid ${tokens.colorBrandStroke1}`,
-    backgroundColor: tokens.colorBrandBackground2,
+    backgroundColor: "rgba(0, 120, 212, 0.08)",
   },
   diskRow: {
     display: "flex",
@@ -131,7 +142,8 @@ const useStyles = makeStyles({
     alignItems: "center",
     justifyContent: "space-between",
     ...shorthands.padding("8px", "14px"),
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(4px)",
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
   },
@@ -339,7 +351,7 @@ export const PageFileSection: React.FC = () => {
             )}
 
             {/* Action buttons */}
-            <div className={styles.actionRow}>
+            <div className={mergeClasses(styles.actionRow, "card-actions-area")}>
               <Button
                 appearance="primary"
                 icon={working ? <Spinner size="tiny" /> : <StorageRegular />}

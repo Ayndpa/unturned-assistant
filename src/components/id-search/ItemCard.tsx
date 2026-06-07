@@ -7,9 +7,15 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     boxShadow: tokens.shadow2,
     cursor: "pointer",
-    transitionProperty: "transform, box-shadow, border-color",
+    transitionProperty: "transform, box-shadow, border-color, background-color",
     transitionDuration: "0.15s",
     transitionTimingFunction: "ease",
+    padding: "10px 12px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    minHeight: "84px",
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
     "&:hover": {
       transform: "translateY(-2px)",
       boxShadow: tokens.shadow8,
@@ -17,8 +23,6 @@ const useStyles = makeStyles({
     },
   },
   selectedCard: {
-    ...shorthands.borderColor(tokens.colorBrandStroke1),
-    backgroundColor: tokens.colorBrandBackground2,
     boxShadow: tokens.shadow8,
   },
   cardId: {
@@ -60,18 +64,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, onClick })
       className={mergeClasses(styles.itemCard, isSelected && styles.selectedCard)}
       onClick={() => onClick(item)}
       style={{
-        borderLeft: `4px solid ${rColor.color}`,
-        padding: "10px 12px",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        minHeight: "84px",
-        ...(isSelected
-          ? {
-              borderColor: tokens.colorBrandStroke1,
-              borderLeftColor: rColor.color,
-            }
-          : {}),
+        borderColor: isSelected ? rColor.color : undefined,
+        backgroundColor: isSelected ? rColor.bg : undefined,
+        borderWidth: isSelected ? "1.5px" : "1px",
       }}
     >
       <div

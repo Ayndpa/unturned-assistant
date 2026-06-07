@@ -18,7 +18,8 @@ import {
   MessageBarBody,
   MessageBarTitle,
   Text,
-  Badge
+  Badge,
+  mergeClasses
 } from "@fluentui/react-components";
 import {
   SettingsRegular,
@@ -49,6 +50,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("8px"),
     marginBottom: "4px",
+    flexShrink: 0,
   },
   section: {
     display: "flex",
@@ -70,7 +72,8 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("12px"),
     ...shorthands.padding("16px"),
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    backdropFilter: "blur(4px)",
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke3}`,
   },
@@ -97,7 +100,8 @@ const useStyles = makeStyles({
     width: "56px",
     height: "56px",
     borderRadius: tokens.borderRadiusLarge,
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(4px)",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     boxShadow: tokens.shadow4,
     flexShrink: 0,
@@ -128,7 +132,8 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     ...shorthands.gap("8px"),
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    backdropFilter: "blur(4px)",
     ...shorthands.padding("12px"),
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke3}`,
@@ -160,7 +165,10 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "row",
     ...shorthands.gap("12px"),
-    marginTop: "4px",
+    marginTop: "16px",
+    ...shorthands.padding("12px", "20px"),
+    ...shorthands.margin("0px", "-20px", "-20px", "-20px"),
+    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
   },
   colorPickerContainer: {
     display: "flex",
@@ -412,7 +420,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </Body1>
           </div>
 
-          <div className={styles.syncStatusContainer} style={{ marginTop: "8px", backgroundColor: "rgba(0,0,0,0.1)" }}>
+          <div className={styles.syncStatusContainer} style={{ marginTop: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <Text weight="semibold">检测状态：</Text>
               {isVerifying ? (
@@ -479,12 +487,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <PersonRegular style={{ fontSize: "14px" }} /> 开发者：
               </div>
               <div className={styles.aboutMetaBadgeContainer}>
-                <Badge appearance="tint" color="brand">Ayndpa</Badge>
+                <Badge appearance="outline">Ayndpa</Badge>
               </div>
             </div>
           </div>
 
-          <div className={styles.aboutActions}>
+          <div className={mergeClasses(styles.aboutActions, "card-actions-area")}>
             <Button
               appearance="primary"
               icon={<FaGithub />}

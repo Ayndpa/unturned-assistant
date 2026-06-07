@@ -7,6 +7,7 @@ import {
   tokens,
   Spinner,
   Badge,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
@@ -88,7 +89,6 @@ const useStyles = makeStyles({
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: tokens.colorNeutralBackground2,
   },
 });
 
@@ -153,7 +153,7 @@ export const ModCard: React.FC<ModCardProps> = ({
         </div>
       </div>
 
-      <div className={styles.modActions}>
+      <div className={mergeClasses(styles.modActions, "card-actions-area")}>
         {isInstalled ? (
           <span
             style={{
@@ -172,7 +172,7 @@ export const ModCard: React.FC<ModCardProps> = ({
         )}
 
         <Button
-          appearance={isInstalled ? "secondary" : "primary"}
+          appearance="primary"
           icon={isInstalling ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
           onClick={() => onInstall(mod)}
           disabled={isInstalling || !!actionStatus || !isPathValid}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -12,7 +12,8 @@ import {
   Spinner,
   createLightTheme,
   createDarkTheme,
-  BrandVariants
+  BrandVariants,
+  Button,
 } from "@fluentui/react-components";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -21,7 +22,8 @@ import {
   PlayRegular,
   SettingsRegular,
   TranslateRegular,
-  WrenchRegular
+  WrenchRegular,
+  NavigationRegular
 } from "@fluentui/react-icons";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
@@ -52,22 +54,81 @@ const useStyles = makeStyles({
     backgroundColor: "transparent", // Show acrylic through
     color: tokens.colorNeutralForeground1,
     fontFamily: tokens.fontFamilyBase,
+    position: "relative",
   },
   sidebar: {
     width: "220px",
     backgroundColor: "var(--app-sidebar-tint)",
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
     ...shorthands.padding("16px", "12px"),
     boxSizing: "border-box",
+    zIndex: 10000,
+    transitionProperty: "transform, width, opacity",
+    transitionDuration: "0.2s",
+    transitionTimingFunction: "ease",
+    "@media (max-width: 900px)": {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      bottom: "0",
+      backgroundColor: "var(--app-sidebar-tint-solid, rgba(240, 240, 240, 0.95))",
+      backdropFilter: "blur(40px)",
+      boxShadow: tokens.shadow16,
+      transform: "translateX(-100%)",
+      opacity: 0,
+      pointerEvents: "none",
+      borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
+    }
+  },
+  sidebarMobileOpen: {
+    "@media (max-width: 900px)": {
+      transform: "translateX(0)",
+      opacity: 1,
+      pointerEvents: "auto",
+    }
+  },
+  sidebarOverlay: {
+    display: "none",
+    "@media (max-width: 900px)": {
+      display: "block",
+      position: "absolute",
+      inset: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.2)",
+      backdropFilter: "blur(2px)",
+      zIndex: 9000,
+      opacity: 0,
+      pointerEvents: "none",
+      transitionProperty: "opacity",
+      transitionDuration: "0.2s",
+    }
+  },
+  sidebarOverlayVisible: {
+    "@media (max-width: 900px)": {
+      opacity: 1,
+      pointerEvents: "auto",
+    }
+  },
+  mobileHeader: {
+    display: "none",
+    "@media (max-width: 900px)": {
+      display: "flex",
+      alignItems: "center",
+      ...shorthands.padding("8px", "12px"),
+      borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+      backgroundColor: "var(--app-sidebar-tint)",
+      ...shorthands.gap("12px"),
+      flexShrink: 0,
+    }
   },
   logoSection: {
     display: "flex",
     alignItems: "center",
     ...shorthands.gap("10px"),
     ...shorthands.padding("8px", "12px", "24px", "12px"),
+    flexShrink: 0,
   },
   logoIcon: {
     fontSize: "24px",
@@ -93,16 +154,24 @@ const useStyles = makeStyles({
   },
   footerSection: {
     ...shorthands.padding("8px", "12px"),
-    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
     marginTop: "16px",
   },
   footerText: {
-    color: tokens.colorNeutralForeground4,
+    color: tokens.colorNeutralForeground3,
     fontSize: "11px",
+    fontWeight: tokens.fontWeightSemibold,
   },
   mainContent: {
     flex: 1,
     height: "100%",
+    overflow: "hidden",
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+  },
+  contentWrapper: {
+    flex: 1,
     overflow: "hidden",
     position: "relative",
   },
@@ -186,6 +255,17 @@ function App() {
   const [themeColor, setThemeColor] = useState<string>("windows");
   const [windowsColor, setWindowsColor] = useState<string>("#0078d4");
   const [isDark, setIsDark] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Responsive listener
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 900;
+      if (!mobile) setIsSidebarOpen(false);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Load theme configuration on mount
   useEffect(() => {
@@ -239,6 +319,14 @@ function App() {
     localStorage.setItem("theme_color", color);
   };
 
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen(prev => !prev);
+  }, []);
+
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
   let currentTheme = isDark ? webDarkTheme : webLightTheme;
 
   const activeColor = themeColor === "windows" ? windowsColor : themeColor;
@@ -286,13 +374,24 @@ function App() {
     }
   };
 
+  const tabNames: Record<string, string> = {
+    home: "首页推荐",
+    "id-search": "物品百科",
+    maps: "地图雷达",
+    localization: "汉化补丁",
+    "ime-compatibility": "系统优化",
+    settings: "系统设置"
+  };
+
+  const activeTabText = tabNames[activeTab] || "Unturned 助手";
+
   return (
     <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
       <div className={`${styles.rootContainer} app-acrylic-shell`} data-theme={isDark ? "dark" : "light"}>
         <TitleBar />
         <div className={styles.appContainer}>
           {/* Navigation Sidebar */}
-          <aside className={styles.sidebar}>
+          <aside className={`${styles.sidebar} ${isSidebarOpen ? styles.sidebarMobileOpen : ""}`}>
             <div>
               <div className={styles.logoSection}>
                 <GiCargoCrate className={styles.logoIcon} style={{ fontSize: "26px" }} />
@@ -303,7 +402,10 @@ function App() {
                 <TabList
                   vertical
                   selectedValue={activeTab}
-                  onTabSelect={(_, data) => setActiveTab(data.value as string)}
+                  onTabSelect={(_, data) => {
+                    setActiveTab(data.value as string);
+                    closeSidebar();
+                  }}
                   className={`${styles.tabList} sidebar-tablist`}
                 >
                   <Tab 
@@ -353,16 +455,32 @@ function App() {
             </div>
 
             <div className={styles.footerSection}>
-              <Text className={styles.footerText}>Unturned Game Assistant</Text>
-              <br />
-              <Text className={styles.footerText} style={{ opacity: 0.7 }}>v0.1.0</Text>
+              <Text className={styles.footerText} style={{ opacity: 0.8 }}>v0.1.0</Text>
             </div>
           </aside>
 
           {/* Main Workspace Area */}
           <main className={styles.mainContent}>
-            {renderContent()}
+            {/* Mobile Nav Bar */}
+            <header className={styles.mobileHeader}>
+              <Button 
+                appearance="subtle" 
+                icon={<NavigationRegular />} 
+                onClick={toggleSidebar}
+              />
+              <Text weight="semibold">{activeTabText}</Text>
+            </header>
+
+            <div className={styles.contentWrapper}>
+              {renderContent()}
+            </div>
           </main>
+
+          {/* Mobile Overlay (Moved to bottom for stacking) */}
+          <div 
+            className={`${styles.sidebarOverlay} ${isSidebarOpen ? styles.sidebarOverlayVisible : ""}`} 
+            onClick={closeSidebar}
+          />
         </div>
       </div>
     </FluentProvider>

@@ -13,6 +13,7 @@ body, html, #root {
 body {
   --app-acrylic-tint: rgba(249, 249, 249, 0.1);
   --app-sidebar-tint: rgba(243, 243, 243, 0.1);
+  --app-sidebar-tint-solid: rgba(249, 249, 249, 0.92);
   --app-titlebar-tint: rgba(249, 249, 249, 0.05);
   --app-control-hover: rgba(0, 0, 0, 0.06);
   --app-control-pressed: rgba(0, 0, 0, 0.10);
@@ -37,6 +38,7 @@ body {
 .app-acrylic-shell[data-theme="dark"] {
   --app-acrylic-tint: rgba(28, 28, 28, 0.45);
   --app-sidebar-tint: rgba(0, 0, 0, 0.15); /* 这里使用纯黑叠加，让原本的 28 灰度稍微加深一点，更协调 */
+  --app-sidebar-tint-solid: rgba(35, 35, 35, 0.95);
   --app-titlebar-tint: rgba(0, 0, 0, 0.05);
   --app-control-hover: rgba(255, 255, 255, 0.08);
   --app-control-pressed: rgba(255, 255, 255, 0.12);
@@ -60,6 +62,21 @@ body {
   backdrop-filter: blur(4px);
 }
 
+.fui-Button:not(.fui-Button--primary) {
+  color: #242424 !important; /* Darker text for light mode transparency */
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+.fui-Button--primary {
+  backdrop-filter: blur(4px);
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.card-actions-area {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 .fui-TabList, 
 .fui-Tab {
   background-color: transparent !important;
@@ -75,8 +92,14 @@ body {
 [data-theme="dark"] .fui-CardPreview,
 [data-theme="dark"] .fui-Input,
 [data-theme="dark"] .fui-Input__input,
+[data-theme="dark"] .fui-Button:not(.fui-Button--primary),
+[data-theme="dark"] .card-actions-area {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
 [data-theme="dark"] .fui-Button:not(.fui-Button--primary) {
-  background-color: rgba(0, 0, 0, 0.15) !important;
+  color: #ffffff !important; /* Light text for dark mode transparency */
+  border: 1px solid rgba(255, 255, 255, 0.15) !important; /* Visible light border */
 }
 
 /* Specific view headers and sections */
@@ -97,7 +120,7 @@ header,
 [data-theme="dark"] .hero-card, 
 [data-theme="dark"] .mod-card, 
 [data-theme="dark"] .item-card {
-  background-color: rgba(0, 0, 0, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
 }
 
 code {

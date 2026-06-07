@@ -27,6 +27,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap("8px"),
     marginBottom: "4px",
+    flexShrink: 0,
   },
 });
 
