@@ -55,6 +55,10 @@ body {
 .fui-AccordionItem,
 .fui-Input,
 .fui-Input__input,
+.fui-Combobox,
+.fui-Combobox__input,
+.fui-Listbox,
+.fui-Option,
 .fui-Button:not(.fui-Button--primary),
 .fui-MenuPopover {
   background-color: rgba(255, 255, 255, 0.05) !important;
@@ -91,6 +95,10 @@ body {
 [data-theme="dark"] .fui-CardPreview,
 [data-theme="dark"] .fui-Input,
 [data-theme="dark"] .fui-Input__input,
+[data-theme="dark"] .fui-Combobox,
+[data-theme="dark"] .fui-Combobox__input,
+[data-theme="dark"] .fui-Listbox,
+[data-theme="dark"] .fui-Option,
 [data-theme="dark"] .fui-Button:not(.fui-Button--primary),
 [data-theme="dark"] .card-actions-area {
   background-color: rgba(255, 255, 255, 0.06) !important;

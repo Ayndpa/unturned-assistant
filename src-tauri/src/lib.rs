@@ -2,7 +2,7 @@ mod commands;
 mod dat_parser;
 mod models;
 
-use commands::{ime::*, item_index::*, localization::*, pagefile::*, theme::*};
+use commands::{ai_translation::*, ime::*, item_index::*, localization::*, pagefile::*, theme::*};
 use tauri::{webview::Color, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -52,6 +52,10 @@ pub fn run() {
             set_custom_pagefile,
             set_automatic_pagefile,
             get_windows_accent_color,
+            scan_missing_translations,
+            translate_and_write_schinese,
+            fetch_available_models,
+            test_model_availability,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

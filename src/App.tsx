@@ -23,13 +23,15 @@ import {
   SettingsRegular,
   TranslateRegular,
   WrenchRegular,
-  NavigationRegular
+  NavigationRegular,
+  SparkleRegular,
 } from "@fluentui/react-icons";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
 import { LocalizationView } from "./components/LocalizationView";
 import { SystemOptimizationView } from "./components/SystemOptimizationView";
+import { AiTranslationView } from "./components/AiTranslationView";
 import { TitleBar } from "./components/TitleBar";
 import { GiCargoCrate } from "react-icons/gi";
 import "./App.css";
@@ -172,7 +174,8 @@ const useStyles = makeStyles({
   },
   contentWrapper: {
     flex: 1,
-    overflow: "hidden",
+    overflowY: "auto",
+    overflowX: "hidden",
     position: "relative",
   },
   loadingContainer: {
@@ -348,6 +351,8 @@ function App() {
         return <IdSearchView onNavigate={(page) => setActiveTab(page)} />;
       case "localization":
         return <LocalizationView />;
+      case "ai-translation":
+        return <AiTranslationView />;
       case "ime-compatibility":
         return <SystemOptimizationView />;
       case "settings":
@@ -379,6 +384,7 @@ function App() {
     "id-search": "物品百科",
     maps: "地图雷达",
     localization: "汉化补丁",
+    "ai-translation": "AI 翻译",
     "ime-compatibility": "系统优化",
     settings: "系统设置"
   };
@@ -435,6 +441,13 @@ function App() {
                     className={styles.tabItem}
                   >
                     汉化补丁
+                  </Tab>
+                  <Tab 
+                    value="ai-translation" 
+                    icon={<SparkleRegular />}
+                    className={styles.tabItem}
+                  >
+                    AI 翻译
                   </Tab>
                   <Tab 
                     value="ime-compatibility" 
