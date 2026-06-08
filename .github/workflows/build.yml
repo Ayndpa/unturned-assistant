@@ -10,17 +10,60 @@ on:
 jobs:
   build-tauri:
     runs-on: windows-latest
+    env:
+      BUN_VERSION: 1.3.14
+      CARGO_HOME: ${{ github.workspace }}\.cargo
+      CARGO_TARGET_DIR: ${{ github.workspace }}\src-tauri\target
+      BUN_INSTALL: ${{ github.workspace }}\.bun
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       
       - name: Setup Bun
+        id: setup-bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
-          
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ${{ env.BUN_INSTALL }}
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      
       - name: Install dependencies
-        run: bun install
-        
+        run: bun install --frozen-lockfile
+
+      - name: Setup Rust toolchain
+        id: rust-toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Get rustc version
+        id: rust-version
+        run: |
+          $v = rustc --version
+          $v = $v -replace '[^A-Za-z0-9\.\-]', '-'
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Cache Rust dependencies and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}\registry
+            ${{ env.CARGO_HOME }}\git
+            ${{ env.CARGO_TARGET_DIR }}
+          key: rust-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-
+            rust-${{ runner.os }}-
+
       - name: Build
         uses: tauri-apps/tauri-action@v0
         env:
