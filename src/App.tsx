@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -14,6 +14,12 @@ import {
   createDarkTheme,
   BrandVariants,
   Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
 } from "@fluentui/react-components";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -35,6 +41,7 @@ import { SystemOptimizationView } from "./components/SystemOptimizationView";
 import { AiTranslationView } from "./components/AiTranslationView";
 import { TitleBar } from "./components/TitleBar";
 import { GiCargoCrate } from "react-icons/gi";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 const useStyles = makeStyles({
@@ -216,6 +223,180 @@ function mixColors(color1: {r:number; g:number; b:number}, color2: {r:number; g:
   };
 }
 
+type GitHubUpdateSource = "release" | "repo_file";
+
+type AppUpdateCheckStatus =
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "error";
+
+interface RemoteVersionInfo {
+  version: string;
+  source: GitHubUpdateSource;
+  releaseUrl?: string;
+  publishedAt?: string;
+  releaseCommitMessage?: string;
+  commitSha?: string;
+}
+
+interface UpdateCheckResult {
+  status: AppUpdateCheckStatus;
+  latest: RemoteVersionInfo | null;
+  message: string;
+  isNewer: boolean;
+}
+
+const UPDATE_REPO_OWNER = "Ayndpa";
+const UPDATE_REPO_NAME = "unturned-assistant";
+const UPDATE_BRANCH = "main";
+const UPDATE_RELEASE_URL = `https://api.github.com/repos/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/releases/latest`;
+const UPDATE_PACKAGE_FILE_URL = `https://raw.githubusercontent.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/${UPDATE_BRANCH}/package.json`;
+const UPDATE_REPO_URL = `https://github.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}`;
+
+const normalizeVersion = (value: string): string =>
+  (value || "").trim().replace(/^v/i, "");
+
+const compareVersions = (left: string, right: string): number => {
+  const leftParts = normalizeVersion(left).split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const rightParts = normalizeVersion(right).split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(leftParts.length, rightParts.length);
+
+  for (let i = 0; i < length; i += 1) {
+    const a = leftParts[i] || 0;
+    const b = rightParts[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+
+  return 0;
+};
+
+const readReleaseVersion = async (): Promise<RemoteVersionInfo | null> => {
+  const response = await fetch(UPDATE_RELEASE_URL, {
+    headers: {
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub Release API 请求失败：${response.status}`);
+  }
+
+  const data = (await response.json()) as {
+    tag_name?: string;
+    html_url?: string;
+    published_at?: string;
+  };
+  const version = data.tag_name || data.html_url?.match(/\/tag\/(.+)$/)?.[1];
+
+  if (!version) return null;
+
+  return {
+    version,
+    source: "release",
+    releaseUrl: data.html_url,
+    publishedAt: data.published_at,
+  };
+};
+
+const readCommitMessageFromTag = async (tag: string): Promise<{ commitMessage: string; sha: string } | null> => {
+  const commitRef = tag.trim();
+  if (!commitRef) return null;
+
+  const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/commits/${encodeURIComponent(commitRef)}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    sha?: string;
+    commit?: { message?: string };
+  };
+
+  if (!data.sha || !data.commit?.message) return null;
+
+  return {
+    commitMessage: data.commit.message.split("\n")[0],
+    sha: data.sha,
+  };
+};
+
+const readRepoPackageVersion = async (): Promise<RemoteVersionInfo | null> => {
+  const response = await fetch(UPDATE_PACKAGE_FILE_URL);
+  if (!response.ok) {
+    throw new Error(`仓库版本文件请求失败：${response.status}`);
+  }
+
+  const raw = await response.text();
+  const parsed = JSON.parse(raw) as { version?: string };
+
+  if (!parsed?.version) return null;
+
+  return {
+    version: parsed.version,
+    source: "repo_file",
+  };
+};
+
+const fetchLatestRemoteVersion = async (): Promise<RemoteVersionInfo> => {
+  try {
+    const releaseInfo = await readReleaseVersion();
+    if (releaseInfo) {
+      const commitInfo = await readCommitMessageFromTag(releaseInfo.version);
+      if (commitInfo) {
+        return {
+          ...releaseInfo,
+          releaseCommitMessage: commitInfo.commitMessage,
+          commitSha: commitInfo.sha,
+        };
+      }
+      return releaseInfo;
+    }
+  } catch (releaseError) {
+    console.warn("Release 版本获取失败，回退到仓库版本文件。", releaseError);
+  }
+
+  const repoInfo = await readRepoPackageVersion();
+  if (repoInfo) return repoInfo;
+
+  throw new Error("无法从 GitHub 获取到版本信息");
+};
+
+const formatReleaseDate = (isoDate?: string): string => {
+  if (!isoDate) return "未知发布时间";
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "发布时间异常";
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+const formatSourceLabel = (source: GitHubUpdateSource): string =>
+  source === "release" ? "GitHub Release" : "仓库版本文件";
+
+const normalizeDisplayVersion = (value?: string): string =>
+  !value || value === "unknown"
+    ? "unknown"
+    : `v${normalizeVersion(value)}`;
+
+const formatCommitMessage = (message?: string): string => {
+  if (!message) return "暂无发布说明";
+  const firstLine = message.split("\n")[0]?.trim();
+  return firstLine || "暂无发布说明";
+};
+
 // Generate BrandVariants from base hex
 function generateBrandVariants(baseHex: string): BrandVariants {
   const base = hexToRgb(baseHex);
@@ -261,6 +442,14 @@ function App() {
   const [isDark, setIsDark] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string>("");
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult>({
+    status: "idle",
+    latest: null,
+    message: "",
+    isNewer: false,
+  });
+  const hasCheckedForUpdateRef = useRef(false);
 
   // Responsive listener
   useEffect(() => {
@@ -292,6 +481,65 @@ function App() {
         setAppVersion("unknown");
       });
   }, []);
+
+  const checkForUpdate = async () => {
+    setUpdateCheck({
+      status: "checking",
+      latest: null,
+      message: "正在检查更新...",
+      isNewer: false,
+    });
+
+    try {
+      const latest = await fetchLatestRemoteVersion();
+      const remote = normalizeVersion(latest.version);
+      const current = normalizeVersion(appVersion);
+
+      if (!current || current === "unknown") {
+        setUpdateCheck({
+          status: "error",
+          latest,
+          message: "当前客户端版本未知，无法进行版本比对，建议手动访问发布页检查更新。",
+          isNewer: false,
+        });
+        return;
+      }
+
+      const isNewer = compareVersions(remote, current) > 0;
+      if (!isNewer) {
+        setUpdateCheck({
+          status: "upToDate",
+          latest,
+          message: `当前已是最新版本（v${current}）`,
+          isNewer: false,
+        });
+        setUpdateDialogOpen(false);
+        return;
+      }
+
+      setUpdateCheck({
+        status: "available",
+        latest,
+        message: "发现新版本",
+        isNewer: true,
+      });
+      setUpdateDialogOpen(true);
+    } catch (err) {
+      setUpdateCheck({
+        status: "error",
+        latest: null,
+        message: err instanceof Error ? err.message : "检查更新失败",
+        isNewer: false,
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (appVersion && !hasCheckedForUpdateRef.current) {
+      hasCheckedForUpdateRef.current = true;
+      void checkForUpdate();
+    }
+  }, [appVersion]);
 
   // Fetch Windows accent color when "windows" theme is active
   useEffect(() => {
@@ -404,6 +652,49 @@ function App() {
 
   return (
     <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
+      <Dialog open={updateDialogOpen} onOpenChange={(_, data) => setUpdateDialogOpen(data.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>发现新版本</DialogTitle>
+            <DialogContent>
+              <div style={{ display: "flex", flexDirection: "column", ...shorthands.gap("6px") }}>
+                <Text style={{ color: tokens.colorNeutralForeground2 }}>
+                  当前版本：{normalizeDisplayVersion(appVersion)}
+                </Text>
+                <Text style={{ color: tokens.colorNeutralForeground2 }}>
+                  最新版本：{normalizeDisplayVersion(updateCheck.latest?.version || "")}
+                </Text>
+                <Text style={{ color: tokens.colorNeutralForeground2 }}>
+                  获取来源：{updateCheck.latest ? formatSourceLabel(updateCheck.latest.source) : "未解析"}
+                </Text>
+                <Text style={{ color: tokens.colorNeutralForeground3 }}>
+                  发布时间：{formatReleaseDate(updateCheck.latest?.publishedAt)}
+                </Text>
+                {updateCheck.latest?.releaseCommitMessage && (
+                  <Text style={{ color: tokens.colorNeutralForeground2, marginTop: "4px" }}>
+                    更新说明：{formatCommitMessage(updateCheck.latest.releaseCommitMessage)}
+                  </Text>
+                )}
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setUpdateDialogOpen(false)}>
+                稍后处理
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => {
+                  const link = updateCheck.latest?.releaseUrl || UPDATE_REPO_URL;
+                  void openUrl(link);
+                  setUpdateDialogOpen(false);
+                }}
+              >
+                前往下载
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
       <div className={`${styles.rootContainer} app-acrylic-shell`} data-theme={isDark ? "dark" : "light"}>
         <TitleBar />
         <div className={styles.appContainer}>

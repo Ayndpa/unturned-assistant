@@ -43,6 +43,12 @@ const useStyles = makeStyles({
     fontWeight: "bold",
     color: tokens.colorBrandForeground1,
   },
+  commandRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
   commandBox: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     backdropFilter: "blur(4px)",
@@ -103,6 +109,15 @@ const useStyles = makeStyles({
     backdropFilter: "blur(20px)",
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
     boxShadow: tokens.shadow16,
+  },
+  commandTemplateInputWrap: {
+    display: "flex",
+    flex: "1 1 auto",
+    minWidth: "220px",
+    position: "relative",
+  },
+  commandCopyButton: {
+    flex: "0 0 auto",
   }
 });
 
@@ -475,10 +490,10 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Text weight="semibold">物品 ID & 指令模板</Text>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className={styles.commandRow}>
           <div className={styles.detailCardId}>{selectedItem.id}</div>
           
-          <div style={{ display: "flex", flex: 1, position: "relative" }}>
+          <div className={styles.commandTemplateInputWrap}>
             <Input
               className={styles.translucentButton}
               value={commandTemplate}
@@ -515,7 +530,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           </div>
           
           <Button
-            className={styles.translucentButton}
+            className={`${styles.translucentButton} ${styles.commandCopyButton}`}
             icon={<CopyRegular />}
             onClick={handleCopyCommand}
             title="按模板复制指令"

@@ -143,6 +143,15 @@ const useStyles = makeStyles({
     boxShadow: `0 0 0 1px ${tokens.colorNeutralStroke1}, inset 0 0 0 1px ${tokens.colorNeutralStroke2}`,
     opacity: 0.95,
   },
+  rightPaneContent: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("16px"),
+    flex: "1 1 auto",
+    minHeight: 0,
+    minWidth: 0,
+    overflowY: "auto",
+  },
   pageHeader: {
     display: "flex",
     flexDirection: "column",
@@ -154,6 +163,7 @@ const useStyles = makeStyles({
     width: "360px",
     position: "relative",
     flexShrink: 0,
+    minHeight: 0,
     borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: "rgba(255, 255, 255, 0.02)", // Very subtle overlay
     padding: "24px",
@@ -161,7 +171,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     boxSizing: "border-box",
     height: "100%",
-    overflowY: "auto",
+    overflowY: "hidden",
     ...shorthands.gap("16px"),
     zIndex: 10000,
     transitionProperty: "transform, opacity",
@@ -910,43 +920,45 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
           </Button>
         </div>
 
-        {selectedItem !== null ? (
-          <ItemDetailPane
-            selectedItem={selectedItem}
-            gamePath={gamePath}
-            isSyncing={isSyncing}
-            onCopy={handleCopy}
-            onSelectItem={setSelectedItem}
-            resolveItem={resolveItem}
-            items={items}
-          />
-        ) : items.length > 0 ? (
-          <IndexManagementPane
-            gamePath={gamePath}
-            extraPaths={extraPaths}
-            itemCount={items.length}
-            categoryStats={categoryStats}
-            isSyncing={isSyncing}
-            indexingProgress={indexingProgress}
-            syncError={syncError}
-            hasMissingIcons={hasMissingIcons}
-            isIndexingImages={isIndexingImages}
-            isRemovingModule={isRemovingModule}
-            isImageIndexModuleInstalled={isImageIndexModuleInstalled}
-            onSync={handleSync}
-            onAddExtraPath={handleAddExtraPath}
-            onRemoveExtraPath={handleRemoveExtraPath}
-            onNavigate={onNavigate}
-            onIndexImages={handleIndexImagesClick}
-            onRemoveImageIndexModule={handleRemoveImageIndexModuleClick}
-          />
-        ) : (
-          <ItemDetailPane
-            selectedItem={null}
-            isSyncing={isSyncing}
-            onCopy={handleCopy}
-          />
-        )}
+        <div className={styles.rightPaneContent}>
+          {selectedItem !== null ? (
+            <ItemDetailPane
+              selectedItem={selectedItem}
+              gamePath={gamePath}
+              isSyncing={isSyncing}
+              onCopy={handleCopy}
+              onSelectItem={setSelectedItem}
+              resolveItem={resolveItem}
+              items={items}
+            />
+          ) : items.length > 0 ? (
+            <IndexManagementPane
+              gamePath={gamePath}
+              extraPaths={extraPaths}
+              itemCount={items.length}
+              categoryStats={categoryStats}
+              isSyncing={isSyncing}
+              indexingProgress={indexingProgress}
+              syncError={syncError}
+              hasMissingIcons={hasMissingIcons}
+              isIndexingImages={isIndexingImages}
+              isRemovingModule={isRemovingModule}
+              isImageIndexModuleInstalled={isImageIndexModuleInstalled}
+              onSync={handleSync}
+              onAddExtraPath={handleAddExtraPath}
+              onRemoveExtraPath={handleRemoveExtraPath}
+              onNavigate={onNavigate}
+              onIndexImages={handleIndexImagesClick}
+              onRemoveImageIndexModule={handleRemoveImageIndexModuleClick}
+            />
+          ) : (
+            <ItemDetailPane
+              selectedItem={null}
+              isSyncing={isSyncing}
+              onCopy={handleCopy}
+            />
+          )}
+        </div>
       </div>
 
       {/* Confirmation Dialog */}
