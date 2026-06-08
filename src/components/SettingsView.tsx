@@ -30,6 +30,7 @@ import {
   CodeRegular
 } from "@fluentui/react-icons";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FaGithub } from "react-icons/fa";
 import { GiCargoCrate } from "react-icons/gi";
@@ -234,6 +235,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ success: boolean; message: string } | null>(null);
   const [customColor, setCustomColor] = useState(themeColor === "windows" ? "" : themeColor);
+  const [appVersion, setAppVersion] = useState<string>("");
 
   useEffect(() => {
     const savedPath = localStorage.getItem("unturned_game_path");
@@ -247,6 +249,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setCustomColor(themeColor);
     }
   }, [themeColor]);
+
+  useEffect(() => {
+    getVersion()
+      .then((version) => setAppVersion(version))
+      .catch((err) => {
+        console.error("Failed to get app version:", err);
+        setAppVersion("unknown");
+      });
+  }, []);
 
   const verifyPath = async (path: string) => {
     if (!path) return;
@@ -462,7 +473,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className={styles.aboutContent}>
               <div className={styles.aboutTitleRow}>
                 <span className={styles.aboutTitle}>Unturned 游戏助手</span>
-                <Badge color="brand" appearance="tint">v0.1.0 (Beta)</Badge>
+                <Badge color="brand" appearance="tint">v{appVersion || "unknown"}</Badge>
               </div>
               <p className={styles.aboutDescription} style={{ margin: "4px 0 0 0" }}>
                 这是一款专为生存联机游戏《Unturned》打造的高效辅助桌面客户端。致力于为玩家提供优质便捷的代码查询、合成查询与地图支持。

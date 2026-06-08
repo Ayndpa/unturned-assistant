@@ -288,6 +288,14 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     return { primary: fullName, secondary: "" };
   };
 
+  const isGuidLike = (value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    return (
+      /^[0-9a-f]{32}$/.test(trimmed) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
+    );
+  };
+
   // Render clickable ingredient / output button
   const renderItemButton = (
     idOrGuid: string,
@@ -555,11 +563,16 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
                     配方 {selectedItem.blueprints!.length > 1 ? `#${index + 1}` : ""}
                   </Badge>
                   {bp.skill && (
-                    <Badge appearance="tint" color="warning" icon={<WrenchRegular />}>
+                    <Badge appearance="tint" color="warning" icon={<WrenchRegular />} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                       技能: {bp.skill}
+                      {bp.skillLevel ? ` (Lv.${bp.skillLevel})` : ""}
                     </Badge>
                   )}
-                  {bp.typeOrCategory && bp.typeOrCategory !== "Barricade" && bp.typeOrCategory !== "Tool" && bp.typeOrCategory !== "Supply" && (
+                  {bp.typeOrCategory &&
+                    !isGuidLike(bp.typeOrCategory) &&
+                    bp.typeOrCategory !== "Barricade" &&
+                    bp.typeOrCategory !== "Tool" &&
+                    bp.typeOrCategory !== "Supply" && (
                     <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>
                       {bp.typeOrCategory}
                     </Caption1>

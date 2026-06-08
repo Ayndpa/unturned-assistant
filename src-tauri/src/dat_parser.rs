@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
@@ -276,11 +276,20 @@ fn parse_item_qty_str(s: &str) -> BlueprintItem {
     }
 }
 
+fn parse_direct_list_item_token(token: &str, items: &mut Vec<BlueprintItem>) {
+    let token = token.trim();
+    if token.is_empty() || token == "{" || token == "}" || token == "[" || token == "]" {
+        return;
+    }
+    items.push(parse_item_qty_str(token));
+}
+
 fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
     let mut inputs = Vec::new();
     let mut outputs = Vec::new();
     let mut category = String::new();
     let mut skill_level = None;
+    let mut skill_name: Option<String> = None;
     
     let mut j = 0;
     while j < tokens.len() {
@@ -293,6 +302,22 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
                 j += 1;
             }
         } else if key == "Build" {
+            if j + 1 < tokens.len() {
+                if let Ok(lvl) = tokens[j + 1].parse::<u32>() {
+                    skill_level = Some(lvl);
+                }
+                j += 2;
+            } else {
+                j += 1;
+            }
+        } else if key == "Skill" {
+            if j + 1 < tokens.len() {
+                skill_name = Some(tokens[j + 1].clone());
+                j += 2;
+            } else {
+                j += 1;
+            }
+        } else if key == "Skill_Level" {
             if j + 1 < tokens.len() {
                 if let Ok(lvl) = tokens[j + 1].parse::<u32>() {
                     skill_level = Some(lvl);
@@ -354,6 +379,7 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
                                 j += 1;
                             }
                         } else {
+                            parse_direct_list_item_token(&tokens[j], &mut inputs);
                             j += 1;
                         }
                     }
@@ -409,6 +435,7 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
                                 j += 1;
                             }
                         } else {
+                            parse_direct_list_item_token(&tokens[j], &mut outputs);
                             j += 1;
                         }
                     }
@@ -426,11 +453,27 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
         }
     }
     
-    let skill = match skill_level {
-        Some(1) => Some("Crafting I".to_string()),
-        Some(2) => Some("Crafting II".to_string()),
-        Some(3) => Some("Crafting III".to_string()),
-        _ => None,
+    let skill = if let Some(level) = skill_level {
+        if let Some(name) = skill_name.as_deref() {
+            match name.to_lowercase().as_str() {
+                "craft" | "crafting" => Some(match level {
+                    1 => "Crafting I".to_string(),
+                    2 => "Crafting II".to_string(),
+                    3 => "Crafting III".to_string(),
+                    _ => format!("Crafting {}", level),
+                }),
+                _ => Some(format!("{} {}", name, level)),
+            }
+        } else {
+            Some(match level {
+                1 => "Crafting I".to_string(),
+                2 => "Crafting II".to_string(),
+                3 => "Crafting III".to_string(),
+                _ => format!("Crafting {}", level),
+            })
+        }
+    } else {
+        skill_name.clone()
     };
 
     Some(Blueprint {

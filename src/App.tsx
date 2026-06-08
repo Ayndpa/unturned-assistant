@@ -26,6 +26,7 @@ import {
   NavigationRegular,
   SparkleRegular,
 } from "@fluentui/react-icons";
+import { getVersion } from "@tauri-apps/api/app";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
@@ -259,6 +260,7 @@ function App() {
   const [windowsColor, setWindowsColor] = useState<string>("#0078d4");
   const [isDark, setIsDark] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>("");
 
   // Responsive listener
   useEffect(() => {
@@ -280,6 +282,15 @@ function App() {
     if (savedMode) {
       setThemeMode(savedMode);
     }
+  }, []);
+
+  useEffect(() => {
+    getVersion()
+      .then((version) => setAppVersion(version))
+      .catch((err) => {
+        console.error("Failed to get app version:", err);
+        setAppVersion("unknown");
+      });
   }, []);
 
   // Fetch Windows accent color when "windows" theme is active
@@ -468,7 +479,7 @@ function App() {
             </div>
 
             <div className={styles.footerSection}>
-              <Text className={styles.footerText} style={{ opacity: 0.8 }}>v0.1.0</Text>
+              <Text className={styles.footerText} style={{ opacity: 0.8 }}>v{appVersion || "unknown"}</Text>
             </div>
           </aside>
 
