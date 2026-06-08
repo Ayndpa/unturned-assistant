@@ -657,7 +657,7 @@ function App() {
           <DialogBody>
             <DialogTitle>发现新版本</DialogTitle>
             <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", ...shorthands.gap("6px") }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <Text style={{ color: tokens.colorNeutralForeground2 }}>
                   当前版本：{normalizeDisplayVersion(appVersion)}
                 </Text>
