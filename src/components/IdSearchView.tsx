@@ -729,7 +729,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             <MessageBar intent="error" style={{ marginTop: "16px", maxWidth: "360px" }}>
               <MessageBarBody>
                 <MessageBarTitle>索引失败</MessageBarTitle>
-                {syncError}
+                <div style={{ whiteSpace: 'pre-wrap' }}>{syncError}</div>
               </MessageBarBody>
             </MessageBar>
           )}

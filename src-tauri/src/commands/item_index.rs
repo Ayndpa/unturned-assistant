@@ -389,12 +389,25 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
     // 4. Wait for game process to exit
     let _ = child.wait();
 
+    let error_log_path = game_root.join("Extras").join("export_error.log");
+    let export_error = if error_log_path.exists() {
+        let error_msg = fs::read_to_string(&error_log_path).unwrap_or_else(|_| "未知错误 (无法读取日志文件)".to_string());
+        let _ = fs::remove_file(&error_log_path);
+        Some(error_msg)
+    } else {
+        None
+    };
+
     // 5. Cleanup the temporary module
     if module_dir.exists() {
         let _ = fs::remove_dir_all(&module_dir);
     }
 
     clear_icon_path_cache(&game_path);
+
+    if let Some(err) = export_error {
+        return Err(format!("图片导出过程中发生严重错误：\n{}", err));
+    }
 
     Ok(())
 }

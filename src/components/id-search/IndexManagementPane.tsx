@@ -119,7 +119,7 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
         <MessageBar intent="error">
           <MessageBarBody>
             <MessageBarTitle>发生错误</MessageBarTitle>
-            {syncError}
+            <div style={{ whiteSpace: 'pre-wrap' }}>{syncError}</div>
           </MessageBarBody>
         </MessageBar>
       )}
