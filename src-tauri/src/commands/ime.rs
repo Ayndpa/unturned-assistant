@@ -3,8 +3,8 @@
 pub async fn check_ime_compatibility() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         let output = Command::new("reg")
             .args(&[
                 "query",
@@ -39,8 +39,8 @@ pub async fn check_ime_compatibility() -> Result<bool, String> {
 pub async fn set_ime_compatibility(enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         let args = if enabled {
             "Start-Process powershell -ArgumentList '-NoProfile -WindowStyle Hidden -Command & { \
@@ -82,9 +82,9 @@ pub async fn set_ime_compatibility(enabled: bool) -> Result<(), String> {
 pub async fn restart_ime() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         use std::path::Path;
         use std::process::Command;
-        use std::os::windows::process::CommandExt;
         use std::thread;
         use std::time::Duration;
 

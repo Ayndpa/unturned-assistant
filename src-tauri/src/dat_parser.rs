@@ -10,22 +10,33 @@ pub fn map_type_to_category(item_type: &str) -> Option<String> {
     let t = item_type.to_lowercase();
     match t.as_str() {
         "gun" | "melee" | "throwable" | "charge" => Some("weapons".to_string()),
-        "magazine" | "sight" | "optics" | "tactical" | "grip" | "barrel" => Some("ammo".to_string()),
+        "magazine" | "sight" | "optics" | "tactical" | "grip" | "barrel" => {
+            Some("ammo".to_string())
+        }
         "hat" | "mask" | "glasses" | "shirt" | "pants" | "vest" | "backpack" => {
             Some("apparel".to_string())
         }
         "vehicle" => Some("vehicles".to_string()),
         "medical" | "food" | "water" => Some("medical".to_string()),
-        "structure" | "barricade" | "storage" | "sentry" | "generator" | "tank" | "trap" | "beacon" => {
-            Some("structures".to_string())
-        }
+        "structure" | "barricade" | "storage" | "sentry" | "generator" | "tank" | "trap"
+        | "beacon" => Some("structures".to_string()),
         "supply" | "tool" | "fuel" | "filter" | "key" | "box" | "map" | "compass" => {
             Some("resources".to_string())
         }
         "vehicle_repair_tool" => Some("resources".to_string()),
-        "arrest_end" | "arrest_start" | "cloud" | "detonator" | "farm" | "fisher" | "grower" | "library" | "oil_pump" | "refill" | "tire" | "vehicle_lockpick_tool" | "vehicle_paint_tool" => {
-            Some("resources".to_string())
-        }
+        "arrest_end"
+        | "arrest_start"
+        | "cloud"
+        | "detonator"
+        | "farm"
+        | "fisher"
+        | "grower"
+        | "library"
+        | "oil_pump"
+        | "refill"
+        | "tire"
+        | "vehicle_lockpick_tool"
+        | "vehicle_paint_tool" => Some("resources".to_string()),
         "optic" => Some("ammo".to_string()),
         _ => None,
     }
@@ -44,7 +55,9 @@ pub fn parse_dat_file(path: &Path) -> HashMap<String, String> {
                     &line
                 };
                 let cleaned_line = cleaned_line.trim();
-                let cleaned_line = cleaned_line.strip_prefix("\u{feff}").unwrap_or(cleaned_line);
+                let cleaned_line = cleaned_line
+                    .strip_prefix("\u{feff}")
+                    .unwrap_or(cleaned_line);
                 if cleaned_line.is_empty() {
                     continue;
                 }
@@ -141,9 +154,7 @@ pub fn load_item_name_and_desc(
     if preferred_lang == "Chinese" {
         // 2a. Try ChineseLocalMod override
         if let Some(mod_root) = mod_path {
-            if let Ok(rel_path) =
-                dir.strip_prefix(bundles_root.parent().unwrap_or(bundles_root))
-            {
+            if let Ok(rel_path) = dir.strip_prefix(bundles_root.parent().unwrap_or(bundles_root)) {
                 let mod_dir = mod_root.join(rel_path);
                 let translation_files = [
                     "Chinese.dat",
@@ -158,10 +169,7 @@ pub fn load_item_name_and_desc(
                     if let Some(n) = translation.get("Name") {
                         if !n.trim().is_empty() {
                             chi_name = n.clone();
-                            chi_desc = translation
-                                .get("Description")
-                                .cloned()
-                                .unwrap_or_default();
+                            chi_desc = translation.get("Description").cloned().unwrap_or_default();
                         }
                     }
                 }
@@ -207,12 +215,23 @@ pub fn load_item_name_and_desc(
     }
 
     // 3. Combine or return
-    if !chi_name.is_empty() && !eng_name.is_empty() && chi_name.to_lowercase() != eng_name.to_lowercase() {
+    if !chi_name.is_empty()
+        && !eng_name.is_empty()
+        && chi_name.to_lowercase() != eng_name.to_lowercase()
+    {
         let combined_name = format!("{} ({})", eng_name, chi_name);
-        let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
+        let desc = if !chi_desc.is_empty() {
+            chi_desc
+        } else {
+            eng_desc
+        };
         Some((combined_name, desc))
     } else if !chi_name.is_empty() {
-        let desc = if !chi_desc.is_empty() { chi_desc } else { eng_desc };
+        let desc = if !chi_desc.is_empty() {
+            chi_desc
+        } else {
+            eng_desc
+        };
         Some((chi_name, desc))
     } else {
         Some((eng_name, eng_desc))
@@ -245,7 +264,13 @@ fn tokenize(input: &str) -> Vec<String> {
         } else {
             let mut s = String::new();
             while let Some(&nc) = chars.peek() {
-                if nc.is_whitespace() || nc == '{' || nc == '}' || nc == '[' || nc == ']' || nc == '"' {
+                if nc.is_whitespace()
+                    || nc == '{'
+                    || nc == '}'
+                    || nc == '['
+                    || nc == ']'
+                    || nc == '"'
+                {
                     break;
                 }
                 s.push(chars.next().unwrap());
@@ -290,7 +315,7 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
     let mut category = String::new();
     let mut skill_level = None;
     let mut skill_name: Option<String> = None;
-    
+
     let mut j = 0;
     while j < tokens.len() {
         let key = &tokens[j];
@@ -452,7 +477,7 @@ fn parse_single_blueprint(tokens: &[String]) -> Option<Blueprint> {
             j += 1;
         }
     }
-    
+
     let skill = if let Some(level) = skill_level {
         if let Some(name) = skill_name.as_deref() {
             match name.to_lowercase().as_str() {
@@ -520,19 +545,22 @@ fn parse_blueprints_from_tokens(tokens: &[String]) -> Vec<Blueprint> {
 fn parse_old_blueprints(properties: &HashMap<String, String>) -> Vec<Blueprint> {
     let mut blueprints = Vec::new();
     let mut bp_idx = 0;
-    
+
     while properties.contains_key(&format!("Blueprint_{}_Type", bp_idx)) {
         let prefix = format!("Blueprint_{}_", bp_idx);
-        let bp_type = properties.get(&format!("{}Type", prefix)).cloned().unwrap_or_default();
-        
+        let bp_type = properties
+            .get(&format!("{}Type", prefix))
+            .cloned()
+            .unwrap_or_default();
+
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
-        
+
         let supplies_count = properties
             .get(&format!("{}Supplies", prefix))
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0);
-            
+
         for s_idx in 0..supplies_count {
             let supply_prefix = format!("{}Supply_{}_", prefix, s_idx);
             if let Some(s_id) = properties.get(&format!("{}ID", supply_prefix)) {
@@ -547,7 +575,7 @@ fn parse_old_blueprints(properties: &HashMap<String, String>) -> Vec<Blueprint> 
                 });
             }
         }
-        
+
         if supplies_count == 0 {
             let supply_prefix = format!("{}Supply_0_", prefix);
             if let Some(s_id) = properties.get(&format!("{}ID", supply_prefix)) {
@@ -562,7 +590,7 @@ fn parse_old_blueprints(properties: &HashMap<String, String>) -> Vec<Blueprint> 
                 });
             }
         }
-        
+
         if let Some(t_id) = properties.get(&format!("{}Tool", prefix)) {
             inputs.push(BlueprintItem {
                 id_or_guid: t_id.clone(),
@@ -570,37 +598,39 @@ fn parse_old_blueprints(properties: &HashMap<String, String>) -> Vec<Blueprint> 
                 is_tool: true,
             });
         }
-        
+
         let mut product_id = "this".to_string();
         if let Some(prod_id) = properties.get(&format!("{}Product", prefix)) {
             product_id = prod_id.clone();
         }
-        
+
         let amount = properties
             .get(&format!("{}Amount", prefix))
             .and_then(|s| s.parse::<u32>().ok())
             .or_else(|| {
-                properties.get(&format!("{}Products", prefix)).and_then(|s| s.parse::<u32>().ok())
+                properties
+                    .get(&format!("{}Products", prefix))
+                    .and_then(|s| s.parse::<u32>().ok())
             })
             .unwrap_or(1);
-            
+
         outputs.push(BlueprintItem {
             id_or_guid: product_id,
             amount,
             is_tool: false,
         });
-        
+
         let skill_level = properties
             .get(&format!("{}Build", prefix))
             .and_then(|s| s.parse::<u32>().ok());
-            
+
         let skill = match skill_level {
             Some(1) => Some("Crafting I".to_string()),
             Some(2) => Some("Crafting II".to_string()),
             Some(3) => Some("Crafting III".to_string()),
             _ => None,
         };
-        
+
         blueprints.push(Blueprint {
             inputs,
             outputs,
@@ -609,7 +639,7 @@ fn parse_old_blueprints(properties: &HashMap<String, String>) -> Vec<Blueprint> 
             skill_level,
             map_index: Some(bp_idx),
         });
-        
+
         bp_idx += 1;
     }
     blueprints
@@ -622,14 +652,14 @@ pub fn parse_dat_file_with_blueprints(
     let mut guid = None;
     let mut blueprints = Vec::new();
     let mut scope_depth = 0usize;
-    
+
     if let Ok(file) = File::open(path) {
         let reader = BufReader::new(file);
-        
+
         let mut inside_blueprints_block = false;
         let mut blueprints_block_text = String::new();
         let mut bracket_count = 0;
-        
+
         for line in reader.lines().map_while(Result::ok) {
             let cleaned_line = if let Some(idx) = line.find("//") {
                 &line[..idx]
@@ -637,15 +667,17 @@ pub fn parse_dat_file_with_blueprints(
                 &line
             };
             let cleaned_line = cleaned_line.trim();
-            let cleaned_line = cleaned_line.strip_prefix("\u{feff}").unwrap_or(cleaned_line);
+            let cleaned_line = cleaned_line
+                .strip_prefix("\u{feff}")
+                .unwrap_or(cleaned_line);
             if cleaned_line.is_empty() {
                 continue;
             }
-            
+
             if inside_blueprints_block {
                 blueprints_block_text.push_str(cleaned_line);
                 blueprints_block_text.push(' ');
-                
+
                 for c in cleaned_line.chars() {
                     if c == '[' {
                         bracket_count += 1;
@@ -653,7 +685,7 @@ pub fn parse_dat_file_with_blueprints(
                         bracket_count -= 1;
                     }
                 }
-                
+
                 if bracket_count <= 0 {
                     inside_blueprints_block = false;
                     let tokens = tokenize(&blueprints_block_text);
@@ -661,15 +693,15 @@ pub fn parse_dat_file_with_blueprints(
                 }
                 continue;
             }
-            
+
             if cleaned_line == "Blueprints" {
                 inside_blueprints_block = true;
                 bracket_count = 0;
                 blueprints_block_text.clear();
                 continue;
             }
-            
-                if cleaned_line.starts_with("Blueprints") && cleaned_line.contains('[') {
+
+            if cleaned_line.starts_with("Blueprints") && cleaned_line.contains('[') {
                 inside_blueprints_block = true;
                 bracket_count = 0;
                 blueprints_block_text.clear();
@@ -706,7 +738,7 @@ pub fn parse_dat_file_with_blueprints(
             if parts.len() >= 2 {
                 let key = parts[0].to_string();
                 let val = parts[1..].join(" ");
-                
+
                 if key == "GUID" {
                     guid = Some(val.clone());
                 }
@@ -721,10 +753,10 @@ pub fn parse_dat_file_with_blueprints(
                 }
             }
         }
-        
+
         let old_bps = parse_old_blueprints(&properties);
         blueprints.extend(old_bps);
     }
-    
+
     (guid, blueprints, properties)
 }

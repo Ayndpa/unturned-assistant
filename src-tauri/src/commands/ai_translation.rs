@@ -311,10 +311,7 @@ pub async fn test_model_availability(
             })
         }
         Ok(r) => {
-            let chat: ChatResponse = r
-                .json()
-                .await
-                .map_err(|e| format!("解析响应失败: {}", e))?;
+            let chat: ChatResponse = r.json().await.map_err(|e| format!("解析响应失败: {}", e))?;
             let reply = chat
                 .choices
                 .into_iter()
@@ -387,10 +384,7 @@ pub async fn translate_and_write_schinese(
     };
 
     // Call the API
-    let endpoint = format!(
-        "{}/chat/completions",
-        api_url.trim_end_matches('/')
-    );
+    let endpoint = format!("{}/chat/completions", api_url.trim_end_matches('/'));
 
     let client = reqwest::Client::builder()
         .user_agent("unturned-assistant/0.1")

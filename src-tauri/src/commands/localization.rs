@@ -53,8 +53,7 @@ pub async fn install_localization_mod(
     }
 
     let cursor = std::io::Cursor::new(res);
-    let mut archive =
-        zip::ZipArchive::new(cursor).map_err(|e| format!("解析 ZIP 失败: {}", e))?;
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("解析 ZIP 失败: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -66,19 +65,16 @@ pub async fn install_localization_mod(
         };
 
         if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath)
-                .map_err(|e| format!("创建目录失败: {}", e))?;
+            std::fs::create_dir_all(&outpath).map_err(|e| format!("创建目录失败: {}", e))?;
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    std::fs::create_dir_all(p)
-                        .map_err(|e| format!("创建父目录失败: {}", e))?;
+                    std::fs::create_dir_all(p).map_err(|e| format!("创建父目录失败: {}", e))?;
                 }
             }
-            let mut outfile = std::fs::File::create(&outpath)
-                .map_err(|e| format!("创建目标文件失败: {}", e))?;
-            std::io::copy(&mut file, &mut outfile)
-                .map_err(|e| format!("写入文件失败: {}", e))?;
+            let mut outfile =
+                std::fs::File::create(&outpath).map_err(|e| format!("创建目标文件失败: {}", e))?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| format!("写入文件失败: {}", e))?;
         }
     }
 

@@ -2,8 +2,8 @@
 pub fn get_windows_accent_color() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         let run_reg = |key: &str, value: &str| -> Option<u32> {
             let output = Command::new("reg")
@@ -36,7 +36,10 @@ pub fn get_windows_accent_color() -> Result<String, String> {
             return Ok(format!("#{:02x}{:02x}{:02x}", r, g, b));
         }
 
-        if let Some(val) = run_reg("HKCU\\Software\\Microsoft\\Windows\\DWM", "ColorizationColor") {
+        if let Some(val) = run_reg(
+            "HKCU\\Software\\Microsoft\\Windows\\DWM",
+            "ColorizationColor",
+        ) {
             let r = ((val >> 16) & 0xFF) as u8;
             let g = ((val >> 8) & 0xFF) as u8;
             let b = (val & 0xFF) as u8;

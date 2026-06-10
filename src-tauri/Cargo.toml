@@ -31,4 +31,5 @@ zip = { version = "2.2.0", default-features = false, features = ["deflate"] }
 window-vibrancy = "0.7.1"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2"
 

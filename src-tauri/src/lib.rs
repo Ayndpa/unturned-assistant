@@ -8,6 +8,7 @@ use tauri::{webview::Color, Manager};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -27,7 +28,8 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
-                let _ = apply_vibrancy(&window, NSVisualEffectMaterial::AppearanceBased, None, None);
+                let _ =
+                    apply_vibrancy(&window, NSVisualEffectMaterial::AppearanceBased, None, None);
             }
 
             Ok(())

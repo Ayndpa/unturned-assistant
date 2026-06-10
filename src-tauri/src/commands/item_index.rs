@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use tauri::{Manager, Emitter};
-use serde::Serialize;
 use rayon::prelude::*;
+use serde::Serialize;
+use tauri::{Emitter, Manager};
 use walkdir::WalkDir;
 
-use crate::dat_parser::{parse_dat_file_with_blueprints, load_item_name_and_desc, map_type_to_category};
-use crate::models::{UnturnedItem, ItemIndexCache};
+use crate::dat_parser::{
+    load_item_name_and_desc, map_type_to_category, parse_dat_file_with_blueprints,
+};
+use crate::models::{ItemIndexCache, UnturnedItem};
 
 const CURRENT_INDEX_VERSION: u32 = 1;
 
@@ -56,13 +58,19 @@ pub async fn scan_unturned_directory(
     if bundles_path.exists() {
         let items_path = bundles_path.join("Items");
         let vehicles_path = bundles_path.join("Vehicles");
-        if items_path.exists() { scan_targets.push(items_path); }
-        if vehicles_path.exists() { scan_targets.push(vehicles_path); }
+        if items_path.exists() {
+            scan_targets.push(items_path);
+        }
+        if vehicles_path.exists() {
+            scan_targets.push(vehicles_path);
+        }
     }
 
     for p in extra_paths {
         let extra_path = PathBuf::from(p);
-        if extra_path.exists() { scan_targets.push(extra_path); }
+        if extra_path.exists() {
+            scan_targets.push(extra_path);
+        }
     }
 
     if scan_targets.is_empty() {
@@ -70,101 +78,155 @@ pub async fn scan_unturned_directory(
     }
 
     // Detect ChineseLocalMod folder
-    let mod_path = base_path.parent()
+    let mod_path = base_path
+        .parent()
         .map(|p| p.join("ChineseLocalMod"))
         .filter(|p| p.exists());
 
     // Step 1: Rapidly collect all .dat file paths (CPU-bound sorting & filtering)
-    let dat_file_paths: Vec<PathBuf> = scan_targets.par_iter().flat_map(|target| {
-        WalkDir::new(target)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                if e.file_type().is_dir() {
-                    let name = e.file_name().to_string_lossy();
-                    // Skip folders that definitely don't contain item/vehicle data
-                    return !matches!(name.as_ref(), "Documentation" | "Scripts" | "Bundles" | ".git" | "Source" | "Trees" | "Nodes" | "Objects");
-                }
-                
-                if e.path().extension().and_then(|s| s.to_str()) == Some("dat") {
-                    if let Some(stem) = e.path().file_stem().and_then(|s| s.to_str()) {
-                        let stem_lower = stem.to_lowercase();
-                        // Unturned items have unique names, translations use standard language names.
-                        let is_translation = matches!(
-                            stem_lower.as_str(),
-                            "english" | "chinese" | "simplified_chinese" | "schinese" | "german" | 
-                            "spanish" | "french" | "russian" | "japanese" | "brazilian" | "portuguese" | "turkish"
+    let dat_file_paths: Vec<PathBuf> = scan_targets
+        .par_iter()
+        .flat_map(|target| {
+            WalkDir::new(target)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    if e.file_type().is_dir() {
+                        let name = e.file_name().to_string_lossy();
+                        // Skip folders that definitely don't contain item/vehicle data
+                        return !matches!(
+                            name.as_ref(),
+                            "Documentation"
+                                | "Scripts"
+                                | "Bundles"
+                                | ".git"
+                                | "Source"
+                                | "Trees"
+                                | "Nodes"
+                                | "Objects"
                         );
-                        if is_translation { return false; }
-                        return true;
                     }
-                }
-                false
-            })
-            .map(|e| e.into_path())
-            .collect::<Vec<_>>()
-    }).collect();
+
+                    if e.path().extension().and_then(|s| s.to_str()) == Some("dat") {
+                        if let Some(stem) = e.path().file_stem().and_then(|s| s.to_str()) {
+                            let stem_lower = stem.to_lowercase();
+                            // Unturned items have unique names, translations use standard language names.
+                            let is_translation = matches!(
+                                stem_lower.as_str(),
+                                "english"
+                                    | "chinese"
+                                    | "simplified_chinese"
+                                    | "schinese"
+                                    | "german"
+                                    | "spanish"
+                                    | "french"
+                                    | "russian"
+                                    | "japanese"
+                                    | "brazilian"
+                                    | "portuguese"
+                                    | "turkish"
+                            );
+                            if is_translation {
+                                return false;
+                            }
+                            return true;
+                        }
+                    }
+                    false
+                })
+                .map(|e| e.into_path())
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
     let total_files = dat_file_paths.len();
     let processed_count = Arc::new(AtomicUsize::new(0));
     let last_update = Arc::new(Mutex::new(Instant::now()));
-    
+
     // Step 2: Parallel Parsing using Rayon
-    let all_items: Vec<UnturnedItem> = dat_file_paths.par_iter().filter_map(|path| {
-        let parent_dir = path.parent()?;
-        
-        // Parse
-        let (guid, mut blueprints, parsed_properties) = parse_dat_file_with_blueprints(path);
-        let id = parsed_properties.get("ID")?.trim().parse::<u32>().ok()?;
+    let all_items: Vec<UnturnedItem> = dat_file_paths
+        .par_iter()
+        .filter_map(|path| {
+            let parent_dir = path.parent()?;
 
-        // Blueprint "this" resolution
-        for bp in &mut blueprints {
-            for input in &mut bp.inputs { if input.id_or_guid.to_lowercase() == "this" { input.id_or_guid = id.to_string(); } }
-            for output in &mut bp.outputs { if output.id_or_guid.to_lowercase() == "this" { output.id_or_guid = id.to_string(); } }
-        }
+            // Parse
+            let (guid, mut blueprints, parsed_properties) = parse_dat_file_with_blueprints(path);
+            let id = parsed_properties.get("ID")?.trim().parse::<u32>().ok()?;
 
-        let (name, desc) = load_item_name_and_desc(parent_dir, &bundles_path, &preferred_lang, mod_path.as_deref())?;
-        
-        // Progress Reporting (Throttled to max 10 updates per second)
-        let current = processed_count.fetch_add(1, Ordering::SeqCst) + 1;
-        {
-            let mut last = last_update.lock().unwrap();
-            if last.elapsed() > Duration::from_millis(100) || current == total_files {
-                let _ = window.emit("indexing-progress", IndexingProgress {
-                    current,
-                    total: total_files,
-                    message: name.clone(),
-                });
-                *last = Instant::now();
+            // Blueprint "this" resolution
+            for bp in &mut blueprints {
+                for input in &mut bp.inputs {
+                    if input.id_or_guid.to_lowercase() == "this" {
+                        input.id_or_guid = id.to_string();
+                    }
+                }
+                for output in &mut bp.outputs {
+                    if output.id_or_guid.to_lowercase() == "this" {
+                        output.id_or_guid = id.to_string();
+                    }
+                }
             }
-        }
 
-        let raw_type = parsed_properties.get("Type").cloned().unwrap_or_default();
-        let raw_type = raw_type.to_lowercase();
+            let (name, desc) = load_item_name_and_desc(
+                parent_dir,
+                &bundles_path,
+                &preferred_lang,
+                mod_path.as_deref(),
+            )?;
 
-        if raw_type == "spawn" {
-            return None;
-        }
-
-        let mut category = map_type_to_category(&raw_type);
-        if category.is_none() {
-            let parent_path = parent_dir.to_string_lossy().to_lowercase();
-            if parent_path.contains("bundles\\vehicles") || parent_path.contains("bundles/vehicles") {
-                category = Some("vehicles".to_string());
+            // Progress Reporting (Throttled to max 10 updates per second)
+            let current = processed_count.fetch_add(1, Ordering::SeqCst) + 1;
+            {
+                let mut last = last_update.lock().unwrap();
+                if last.elapsed() > Duration::from_millis(100) || current == total_files {
+                    let _ = window.emit(
+                        "indexing-progress",
+                        IndexingProgress {
+                            current,
+                            total: total_files,
+                            message: name.clone(),
+                        },
+                    );
+                    *last = Instant::now();
+                }
             }
-        }
-        let category = category?;
 
-        Some(UnturnedItem {
-            id,
-            guid,
-            name,
-            category,
-            description: desc,
-            rarity: parsed_properties.get("Rarity").cloned().unwrap_or_else(|| "Common".to_string()),
-            blueprints: if blueprints.is_empty() { None } else { Some(blueprints) },
+            let raw_type = parsed_properties.get("Type").cloned().unwrap_or_default();
+            let raw_type = raw_type.to_lowercase();
+
+            if raw_type == "spawn" {
+                return None;
+            }
+
+            let mut category = map_type_to_category(&raw_type);
+            if category.is_none() {
+                let parent_path = parent_dir.to_string_lossy().to_lowercase();
+                if parent_path.contains("bundles\\vehicles")
+                    || parent_path.contains("bundles/vehicles")
+                {
+                    category = Some("vehicles".to_string());
+                }
+            }
+            let category = category?;
+
+            Some(UnturnedItem {
+                id,
+                guid,
+                name,
+                category,
+                description: desc,
+                rarity: parsed_properties
+                    .get("Rarity")
+                    .cloned()
+                    .unwrap_or_else(|| "Common".to_string()),
+                blueprints: if blueprints.is_empty() {
+                    None
+                } else {
+                    Some(blueprints)
+                },
+            })
         })
-    }).collect();
+        .collect();
 
     // Final Sort
     let mut sorted_items = all_items;
@@ -183,17 +245,24 @@ pub async fn scan_unturned_directory(
         }
     }
 
-    let _ = window.emit("indexing-progress", IndexingProgress {
-        current: total_files,
-        total: total_files,
-        message: "索引构建完成！".to_string(),
-    });
+    let _ = window.emit(
+        "indexing-progress",
+        IndexingProgress {
+            current: total_files,
+            total: total_files,
+            message: "索引构建完成！".to_string(),
+        },
+    );
 
     Ok(sorted_items)
 }
 
 fn icon_cache_key(game_path: &str, is_vehicle: bool) -> String {
-    format!("{}|{}", game_path, if is_vehicle { "Vehicles" } else { "Items" })
+    format!(
+        "{}|{}",
+        game_path,
+        if is_vehicle { "Vehicles" } else { "Items" }
+    )
 }
 
 fn normalize_guid_for_icon_lookup(guid: &str) -> String {
@@ -210,7 +279,10 @@ fn build_icon_path_cache(search_path: &Path, is_vehicle: bool) -> IconCacheMap {
         return cache;
     }
 
-    for entry in WalkDir::new(search_path).into_iter().filter_map(|entry| entry.ok()) {
+    for entry in WalkDir::new(search_path)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+    {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -230,21 +302,24 @@ fn build_icon_path_cache(search_path: &Path, is_vehicle: bool) -> IconCacheMap {
         }
 
         // Exact match by normalized GUID.
-        cache.entry(stem_clean.clone())
+        cache
+            .entry(stem_clean.clone())
             .or_insert_with(|| path.to_string_lossy().to_string());
 
         // Some image packs append suffixes, e.g. <guid>_256.png or <guid>-...
         if let Some(pos) = stem_clean.find('_') {
             if pos > 0 {
                 let prefix = stem_clean[..pos].to_string();
-                cache.entry(prefix)
+                cache
+                    .entry(prefix)
                     .or_insert_with(|| path.to_string_lossy().to_string());
             }
         }
         if let Some(pos) = stem_clean.find('-') {
             if pos > 0 {
                 let prefix = stem_clean[..pos].to_string();
-                cache.entry(prefix)
+                cache
+                    .entry(prefix)
                     .or_insert_with(|| path.to_string_lossy().to_string());
             }
         }
@@ -253,7 +328,8 @@ fn build_icon_path_cache(search_path: &Path, is_vehicle: bool) -> IconCacheMap {
         if is_vehicle {
             let prefix_8 = stem_clean.chars().take(32).collect::<String>();
             if !prefix_8.is_empty() && prefix_8 != stem_clean {
-                cache.entry(prefix_8)
+                cache
+                    .entry(prefix_8)
                     .or_insert_with(|| path.to_string_lossy().to_string());
             }
         }
@@ -278,7 +354,11 @@ fn clear_icon_path_cache(game_path: &str) {
 }
 
 #[tauri::command]
-pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool) -> Option<String> {
+pub async fn resolve_item_icon(
+    game_path: String,
+    guid: String,
+    is_vehicle: bool,
+) -> Option<String> {
     let game_path_ref = game_path.as_str();
     let base_path = PathBuf::from(game_path_ref).join("Extras");
     if !base_path.exists() {
@@ -294,14 +374,20 @@ pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool
 
     let target_guid_clean = normalize_guid_for_icon_lookup(&guid);
     let cache_id = icon_cache_key(game_path_ref, is_vehicle);
-    let mut cache = ICON_PATH_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock().map(|g| g).unwrap_or_else(|p| p.into_inner());
+    let mut cache = ICON_PATH_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map(|g| g)
+        .unwrap_or_else(|p| p.into_inner());
 
     if !cache.contains_key(&cache_id) {
         let icon_cache = build_icon_path_cache(&search_path, is_vehicle);
         cache.insert(cache_id.clone(), icon_cache);
     }
 
-    cache.get(&cache_id).and_then(|index| index.get(&target_guid_clean).cloned())
+    cache
+        .get(&cache_id)
+        .and_then(|index| index.get(&target_guid_clean).cloned())
 }
 
 /// Load the previously cached item index from disk.
@@ -362,7 +448,12 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
     let target_dir = game_root.join("Modules");
 
     // 1. Get resource path for the zipped module
-    let resource_path = app.path().resolve("resources/UnturnedImages.zip", tauri::path::BaseDirectory::Resource)
+    let resource_path = app
+        .path()
+        .resolve(
+            "resources/UnturnedImages.zip",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| format!("无法定位资源文件 UnturnedImages.zip: {}", e))?;
 
     if !resource_path.exists() {
@@ -410,7 +501,8 @@ pub async fn index_game_images(app: tauri::AppHandle, game_path: String) -> Resu
 
     let error_log_path = game_root.join("Extras").join("export_error.log");
     let export_error = if error_log_path.exists() {
-        let error_msg = fs::read_to_string(&error_log_path).unwrap_or_else(|_| "未知错误 (无法读取日志文件)".to_string());
+        let error_msg = fs::read_to_string(&error_log_path)
+            .unwrap_or_else(|_| "未知错误 (无法读取日志文件)".to_string());
         let _ = fs::remove_file(&error_log_path);
         Some(error_msg)
     } else {

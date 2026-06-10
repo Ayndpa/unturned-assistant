@@ -5,8 +5,8 @@ use crate::models::{DiskInfo, PageFileEntry, SystemPageFileStatus};
 pub async fn get_pagefile_status() -> Result<SystemPageFileStatus, String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         // ── Disk info ────────────────────────────────────────────────────────
         let disk_output = Command::new("powershell")
@@ -131,8 +131,8 @@ pub async fn set_custom_pagefile() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::io::Write;
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         let script_lines = [
             "$cs = Get-CimInstance Win32_ComputerSystem",
@@ -191,8 +191,8 @@ pub async fn set_automatic_pagefile() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::io::Write;
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
 
         let script_lines = [
             "$cs = Get-CimInstance Win32_ComputerSystem",
