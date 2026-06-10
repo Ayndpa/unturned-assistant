@@ -214,6 +214,27 @@ const formatReleaseDate = (isoDate?: string): string => {
 
 const formatSourceLabel = (source: string): string => source;
 
+type UpdateCheckStatus =
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "downloading"
+  | "error";
+
+interface RemoteVersionInfo {
+  version: string;
+  source: string;
+  releaseUrl?: string;
+  publishedAt?: string;
+}
+
+interface UpdateCheckResult {
+  status: UpdateCheckStatus;
+  latest: RemoteVersionInfo | null;
+  message: string;
+}
+
 interface SettingsViewProps {
   themeMode: "light" | "dark" | "system";
   onChangeThemeMode: (mode: "light" | "dark" | "system") => void;
@@ -311,7 +332,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const update = await check();
       if (!update) return;
 
-      setUpdateCheck(prev => ({ ...prev, status: "downloading", message: "正在下载并安装更新..." }));
+      setUpdateCheck((prev: UpdateCheckResult) => ({ ...prev, status: "downloading", message: "正在下载并安装更新..." }));
       
       let downloaded = 0;
       let contentLength = 0;
@@ -332,7 +353,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         }
       });
 
-      setUpdateCheck(prev => ({ ...prev, message: "安装完成，正在重启..." }));
+      setUpdateCheck((prev: UpdateCheckResult) => ({ ...prev, message: "安装完成，正在重启..." }));
       await relaunch();
     } catch (err) {
       console.error("Update failed:", err);
