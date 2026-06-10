@@ -64,7 +64,22 @@ jobs:
             rust-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-
             rust-${{ runner.os }}-
 
+      - name: Extract Changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $notes = Get-Content CHANGELOG.md -Raw
+          $notes = $notes.Trim()
+          $notes | Out-File -FilePath dist-changelog.txt -Encoding utf8
+          
+          # 设置多行输出
+          $EOF = [System.Guid]::NewGuid().ToString()
+          "notes<<$EOF" >> $env:GITHUB_OUTPUT
+          $notes >> $env:GITHUB_OUTPUT
+          "$EOF" >> $env:GITHUB_OUTPUT
+
       - name: Build and Release
+        id: tauri-build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,6 +88,6 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Unturned Assistant v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseBody: ${{ steps.changelog.outputs.notes }}
           releaseDraft: true
           prerelease: false
