@@ -29,28 +29,11 @@ jobs:
             echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing!"
             exit 1
           fi
-          # 将私钥写入临时文件
           echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ${{ github.workspace }}\signer.key
           echo "TAURI_SIGNING_PRIVATE_KEY_PATH=${{ github.workspace }}\signer.key" >> $GITHUB_ENV
           echo "Signing key prepared at ${{ github.workspace }}\signer.key"
 
       - name: Setup Bun
-...
-      - name: Build
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ github.workspace }}\signer.key
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Unturned Assistant v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
-          includeUpdaterJson: true
-          includeRelease: true
-
         id: setup-bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -98,7 +81,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ github.workspace }}\signer.key
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
@@ -106,5 +89,5 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true # 显式要求生成 updater JSON
+          includeUpdaterJson: true
           includeRelease: true
