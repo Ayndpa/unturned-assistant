@@ -22,33 +22,12 @@ jobs:
         with:
           fetch-depth: 1
       
-      - name: Prepare Signing Key
-        shell: bash
-        run: |
-          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing!"
-            exit 1
-          fi
-          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ${{ github.workspace }}\signer.key
-          echo "TAURI_SIGNING_PRIVATE_KEY_PATH=${{ github.workspace }}\signer.key" >> $GITHUB_ENV
-          echo "Signing key prepared at ${{ github.workspace }}\signer.key"
-
       - name: Setup Bun
         id: setup-bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache Bun modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            ${{ env.BUN_INSTALL }}
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-      
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -58,31 +37,36 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Get rustc version
-        id: rust-version
+      - name: Get App Version
+        id: get_version
+        shell: bash
         run: |
-          $v = rustc --version
-          $v = $v -replace '[^A-Za-z0-9\.\-]', '-'
-          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          VERSION=$(grep '"version":' src-tauri/tauri.conf.json | head -1 | awk -F: '{ print $2 }' | sed 's/[", ]//g')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Cache Rust dependencies and build artifacts
+      - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.CARGO_HOME }}\registry
             ${{ env.CARGO_HOME }}\git
             ${{ env.CARGO_TARGET_DIR }}
-          key: rust-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-
-            rust-${{ runner.os }}-
+          key: rust-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
 
-      - name: Build
+      - name: Build and Sign
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          bun tauri build
+          # 手动执行签名以确保生成 .sig 文件
+          bun tauri signer sign -k "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" "src-tauri/target/release/bundle/nsis/unturned-assistant_${{ steps.get_version.outputs.version }}_x64-setup.exe"
+
+      - name: Create Release and Upload Artifacts
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ github.workspace }}\signer.key
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: 'Unturned Assistant v__VERSION__'
