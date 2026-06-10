@@ -17,23 +17,40 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}\.cargo
       CARGO_TARGET_DIR: ${{ github.workspace }}\src-tauri\target
       BUN_INSTALL: ${{ github.workspace }}\.bun
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       
-      - name: Verify Signing Key
+      - name: Prepare Signing Key
         shell: bash
         run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing! Check your GitHub Secrets."
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing!"
             exit 1
           fi
-          echo "Signing key is present."
+          # 将私钥写入临时文件
+          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > ${{ github.workspace }}\signer.key
+          echo "TAURI_SIGNING_PRIVATE_KEY_PATH=${{ github.workspace }}\signer.key" >> $GITHUB_ENV
+          echo "Signing key prepared at ${{ github.workspace }}\signer.key"
 
       - name: Setup Bun
+...
+      - name: Build
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ github.workspace }}\signer.key
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Unturned Assistant v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          includeRelease: true
+
         id: setup-bun
         uses: oven-sh/setup-bun@v2
         with:
