@@ -27,7 +27,6 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { check } from "@tauri-apps/plugin-updater";
 import { FaGithub } from "react-icons/fa";
 import { GiCargoCrate } from "react-icons/gi";
 
@@ -201,34 +200,14 @@ const colorPresets = [
   { value: "#646f79", label: "简约灰 (Gray)", color: "#646f79" },
 ] as const;
 
-type UpdateCheckStatus =
-  | "idle"
-  | "checking"
-  | "upToDate"
-  | "available"
-  | "downloading"
-  | "error";
-
-interface RemoteVersionInfo {
-  version: string;
-  source: string;
-  releaseUrl?: string;
-  publishedAt?: string;
-}
-
-interface UpdateCheckResult {
-  status: UpdateCheckStatus;
-  latest: RemoteVersionInfo | null;
-  message: string;
-}
-
 interface SettingsViewProps {
   themeMode: "light" | "dark" | "system";
   onChangeThemeMode: (mode: "light" | "dark" | "system") => void;
   themeColor: string;
   onChangeThemeColor: (color: string) => void;
   currentSystemColor: string;
-  onShowUpdateDialog?: () => void;
+  onCheckForUpdate?: () => void;
+  isUpdateAvailable?: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -237,7 +216,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   themeColor,
   onChangeThemeColor,
   currentSystemColor,
-  onShowUpdateDialog
+  onCheckForUpdate,
+  isUpdateAvailable
 }) => {
   const styles = useStyles();
   const [gamePath, setGamePath] = useState("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Unturned");
@@ -245,11 +225,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [verificationResult, setVerificationResult] = useState<{ success: boolean; message: string } | null>(null);
   const [customColor, setCustomColor] = useState(themeColor === "windows" ? "" : themeColor);
   const [appVersion, setAppVersion] = useState<string>("");
-  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult>({
-    status: "idle",
-    latest: null,
-    message: "点击“检查更新”以获取最新版本信息",
-  });
 
   useEffect(() => {
     const savedPath = localStorage.getItem("unturned_game_path");
@@ -272,52 +247,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setAppVersion("unknown");
       });
   }, []);
-
-  useEffect(() => {
-    if (appVersion) {
-      void checkForUpdate();
-    }
-  }, [appVersion]);
-
-  const checkForUpdate = async () => {
-    setUpdateCheck({
-      status: "checking",
-      latest: null,
-      message: "正在检查更新...",
-    });
-    try {
-      const update = await check();
-      
-      if (!update) {
-        setUpdateCheck({
-          status: "upToDate",
-          latest: null,
-          message: `当前已是最新版本（v${appVersion}）`,
-        });
-        return;
-      }
-
-      setUpdateCheck({
-        status: "available",
-        latest: {
-          version: update.version,
-          source: "GitHub Releases",
-        },
-        message: `发现新版本：v${update.version}。`,
-      });
-      
-      if (onShowUpdateDialog) {
-        onShowUpdateDialog();
-      }
-    } catch (err) {
-      console.error("Update check failed:", err);
-      setUpdateCheck({
-        status: "error",
-        latest: null,
-        message: err instanceof Error ? err.message : "检查更新失败",
-      });
-    }
-  };
 
   const verifyPath = async (path: string) => {
     if (!path) return;
@@ -525,15 +454,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className={styles.aboutTitleRow}>
                 <span className={styles.aboutTitle}>Unturned 游戏助手</span>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Badge color="brand" appearance="tint">v{appVersion || "unknown"}</Badge>
-                  {updateCheck.status === "available" && (
+                  <Badge 
+                    color="brand" 
+                    appearance="tint" 
+                    style={{ cursor: "pointer" }} 
+                    onClick={onCheckForUpdate}
+                    title="检查更新"
+                  >
+                    v{appVersion || "unknown"}
+                  </Badge>
+                  {isUpdateAvailable && (
                     <Badge 
                       color="important" 
                       appearance="filled" 
                       style={{ cursor: "pointer" }}
-                      onClick={onShowUpdateDialog}
+                      onClick={onCheckForUpdate}
                     >
-                      检测到新版本 (点击更新)
+                      新版本可用
                     </Badge>
                   )}
                 </div>

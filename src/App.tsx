@@ -15,12 +15,17 @@ import {
   BrandVariants,
   Button,
   Dialog,
-  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
   DialogTitle,
   Badge,
+  useToastController,
+  useId,
+  Toast,
+  ToastTitle,
+  ToastBody,
+  Toaster,
 } from "@fluentui/react-components";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -229,7 +234,7 @@ function mixColors(color1: {r:number; g:number; b:number}, color2: {r:number; g:
   };
 }
 
-type GitHubUpdateSource = "release" | "repo_file";
+type GitHubUpdateSource = "release";
 
 type AppUpdateCheckStatus =
   | "idle"
@@ -243,8 +248,7 @@ interface RemoteVersionInfo {
   source: GitHubUpdateSource;
   releaseUrl?: string;
   publishedAt?: string;
-  releaseCommitMessage?: string;
-  commitSha?: string;
+  changelog?: string;
 }
 
 interface UpdateCheckResult {
@@ -256,9 +260,9 @@ interface UpdateCheckResult {
 
 const UPDATE_REPO_OWNER = "Ayndpa";
 const UPDATE_REPO_NAME = "unturned-assistant";
-const UPDATE_BRANCH = "main";
+const UPDATE_BRANCH = "master";
 const UPDATE_RELEASE_URL = `https://api.github.com/repos/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/releases/latest`;
-const UPDATE_PACKAGE_FILE_URL = `https://raw.githubusercontent.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/${UPDATE_BRANCH}/package.json`;
+const UPDATE_CHANGELOG_URL = `https://raw.githubusercontent.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/refs/heads/${UPDATE_BRANCH}/CHANGELOG.md`;
 const UPDATE_REPO_URL = `https://github.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}`;
 
 const normalizeVersion = (value: string): string =>
@@ -307,70 +311,26 @@ const readReleaseVersion = async (): Promise<RemoteVersionInfo | null> => {
   };
 };
 
-const readCommitMessageFromTag = async (tag: string): Promise<{ commitMessage: string; sha: string } | null> => {
-  const commitRef = tag.trim();
-  if (!commitRef) return null;
-
-  const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/commits/${encodeURIComponent(commitRef)}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-    },
-  });
-
-  if (!response.ok) {
+const fetchChangelog = async (): Promise<string | null> => {
+  try {
+    const response = await fetch(UPDATE_CHANGELOG_URL);
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
     return null;
   }
-
-  const data = (await response.json()) as {
-    sha?: string;
-    commit?: { message?: string };
-  };
-
-  if (!data.sha || !data.commit?.message) return null;
-
-  return {
-    commitMessage: data.commit.message.split("\n")[0],
-    sha: data.sha,
-  };
-};
-
-const readRepoPackageVersion = async (): Promise<RemoteVersionInfo | null> => {
-  const response = await fetch(UPDATE_PACKAGE_FILE_URL);
-  if (!response.ok) {
-    throw new Error(`仓库版本文件请求失败：${response.status}`);
-  }
-
-  const raw = await response.text();
-  const parsed = JSON.parse(raw) as { version?: string };
-
-  if (!parsed?.version) return null;
-
-  return {
-    version: parsed.version,
-    source: "repo_file",
-  };
 };
 
 const fetchLatestRemoteVersion = async (): Promise<RemoteVersionInfo> => {
-  try {
-    const releaseInfo = await readReleaseVersion();
-    if (releaseInfo) {
-      const commitInfo = await readCommitMessageFromTag(releaseInfo.version);
-      if (commitInfo) {
-        return {
-          ...releaseInfo,
-          releaseCommitMessage: commitInfo.commitMessage,
-          commitSha: commitInfo.sha,
-        };
-      }
-      return releaseInfo;
-    }
-  } catch (releaseError) {
-    console.warn("Release 版本获取失败，回退到仓库版本文件。", releaseError);
+  const changelog = await fetchChangelog();
+  
+  const releaseInfo = await readReleaseVersion();
+  if (releaseInfo) {
+    return {
+      ...releaseInfo,
+      changelog: changelog || undefined,
+    };
   }
-
-  const repoInfo = await readRepoPackageVersion();
-  if (repoInfo) return repoInfo;
 
   throw new Error("无法从 GitHub 获取到版本信息");
 };
@@ -389,19 +349,10 @@ const formatReleaseDate = (isoDate?: string): string => {
   });
 };
 
-const formatSourceLabel = (source: GitHubUpdateSource): string =>
-  source === "release" ? "GitHub Release" : "仓库版本文件";
-
 const normalizeDisplayVersion = (value?: string): string =>
   !value || value === "unknown"
     ? "unknown"
     : `v${normalizeVersion(value)}`;
-
-const formatCommitMessage = (message?: string): string => {
-  if (!message) return "暂无发布说明";
-  const firstLine = message.split("\n")[0]?.trim();
-  return firstLine || "暂无发布说明";
-};
 
 // Generate BrandVariants from base hex
 function generateBrandVariants(baseHex: string): BrandVariants {
@@ -439,13 +390,27 @@ function generateBrandVariants(baseHex: string): BrandVariants {
   };
 }
 
-function App() {
+interface AppContentProps {
+  themeMode: "light" | "dark" | "system";
+  setThemeMode: (mode: "light" | "dark" | "system") => void;
+  themeColor: string;
+  setThemeColor: (color: string) => void;
+  windowsColor: string;
+  isDark: boolean;
+  toasterId: string;
+}
+
+function AppContent({
+  themeMode,
+  setThemeMode,
+  themeColor,
+  setThemeColor,
+  windowsColor,
+  isDark,
+  toasterId
+}: AppContentProps) {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState("home");
-  const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">("system");
-  const [themeColor, setThemeColor] = useState<string>("windows");
-  const [windowsColor, setWindowsColor] = useState<string>("#0078d4");
-  const [isDark, setIsDark] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string>("");
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -513,18 +478,6 @@ function App() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Load theme configuration on mount
-  useEffect(() => {
-    const savedColor = localStorage.getItem("theme_color");
-    if (savedColor) {
-      setThemeColor(savedColor);
-    }
-    const savedMode = localStorage.getItem("theme_mode") as "light" | "dark" | "system";
-    if (savedMode) {
-      setThemeMode(savedMode);
-    }
-  }, []);
-
   useEffect(() => {
     getVersion()
       .then((version) => setAppVersion(version))
@@ -534,7 +487,19 @@ function App() {
       });
   }, []);
 
-  const checkForUpdate = async () => {
+  const { dispatchToast } = useToastController(toasterId);
+
+  const checkForUpdate = async (manual = false) => {
+    if (manual) {
+      dispatchToast(
+        <Toast>
+          <ToastTitle>检查更新</ToastTitle>
+          <ToastBody>正在获取最新版本信息...</ToastBody>
+        </Toast>,
+        { intent: "info" }
+      );
+    }
+
     setUpdateCheck({
       status: "checking",
       latest: null,
@@ -554,6 +519,15 @@ function App() {
           message: "当前客户端版本未知，无法进行版本比对，建议手动访问发布页检查更新。",
           isNewer: false,
         });
+        if (manual) {
+          dispatchToast(
+            <Toast>
+              <ToastTitle>检查失败</ToastTitle>
+              <ToastBody>无法识别当前客户端版本。</ToastBody>
+            </Toast>,
+            { intent: "warning" }
+          );
+        }
         return;
       }
 
@@ -566,6 +540,15 @@ function App() {
           isNewer: false,
         });
         setUpdateDialogOpen(false);
+        if (manual) {
+          dispatchToast(
+            <Toast>
+              <ToastTitle>检查完成</ToastTitle>
+              <ToastBody>当前已是最新版本。</ToastBody>
+            </Toast>,
+            { intent: "success" }
+          );
+        }
         return;
       }
 
@@ -577,12 +560,22 @@ function App() {
       });
       setUpdateDialogOpen(true);
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "检查更新失败";
       setUpdateCheck({
         status: "error",
         latest: null,
-        message: err instanceof Error ? err.message : "检查更新失败",
+        message: errorMsg,
         isNewer: false,
       });
+      if (manual) {
+        dispatchToast(
+          <Toast>
+            <ToastTitle>检查失败</ToastTitle>
+            <ToastBody>{errorMsg}</ToastBody>
+          </Toast>,
+          { intent: "error" }
+        );
+      }
     }
   };
 
@@ -592,36 +585,6 @@ function App() {
       void checkForUpdate();
     }
   }, [appVersion]);
-
-  // Fetch Windows accent color when "windows" theme is active
-  useEffect(() => {
-    if (themeColor === "windows") {
-      invoke<string>("get_windows_accent_color")
-        .then((color) => {
-          setWindowsColor(color);
-        })
-        .catch((err) => {
-          console.error("Failed to get Windows accent color:", err);
-        });
-    }
-  }, [themeColor]);
-
-  // Determine system theme preference
-  useEffect(() => {
-    if (themeMode === "system") {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      setIsDark(mediaQuery.matches);
-      
-      const listener = (e: MediaQueryListEvent) => {
-        setIsDark(e.matches);
-      };
-      
-      mediaQuery.addEventListener("change", listener);
-      return () => mediaQuery.removeEventListener("change", listener);
-    } else {
-      setIsDark(themeMode === "dark");
-    }
-  }, [themeMode]);
 
   const handleThemeModeChange = (mode: "light" | "dark" | "system") => {
     setThemeMode(mode);
@@ -640,19 +603,6 @@ function App() {
   const closeSidebar = useCallback(() => {
     setIsSidebarOpen(false);
   }, []);
-
-  let currentTheme = isDark ? webDarkTheme : webLightTheme;
-
-  const activeColor = themeColor === "windows" ? windowsColor : themeColor;
-
-  if (activeColor && activeColor !== "#0078d4") {
-    try {
-      const brand = generateBrandVariants(activeColor);
-      currentTheme = isDark ? createDarkTheme(brand) : createLightTheme(brand);
-    } catch (err) {
-      console.error("Failed to generate brand variants:", err);
-    }
-  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -674,7 +624,8 @@ function App() {
             themeColor={themeColor}
             onChangeThemeColor={handleThemeColorChange}
             currentSystemColor={windowsColor}
-            onShowUpdateDialog={() => setUpdateDialogOpen(true)}
+            onCheckForUpdate={() => void checkForUpdate(true)}
+            isUpdateAvailable={updateCheck.status === "available"}
           />
         );
       case "maps":
@@ -704,7 +655,7 @@ function App() {
   const activeTabText = tabNames[activeTab] || "Unturned 助手";
 
   return (
-    <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
+    <>
       <Dialog open={updateDialogOpen} onOpenChange={(_, data) => setUpdateDialogOpen(data.open)}>
         <DialogSurface style={{ padding: 0, overflow: "hidden", maxWidth: "460px" }}>
           <DialogBody style={{ padding: 0, display: "flex", flexDirection: "column", width: "100%" }}>
@@ -750,15 +701,24 @@ function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <Text size={200} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>更新说明</Text>
                   <div style={{ 
-                    maxHeight: "100px", 
+                    maxHeight: "150px", 
                     overflowY: "auto", 
                     padding: "8px 12px",
                     backgroundColor: tokens.colorNeutralBackground3,
                     borderRadius: tokens.borderRadiusSmall,
                     borderLeft: `3px solid ${tokens.colorBrandForeground1}`
                   }}>
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: "1.5" }}>
-                      {formatCommitMessage(updateCheck.latest?.releaseCommitMessage)}
+                    <Text 
+                      size={200} 
+                      style={{ 
+                        color: tokens.colorNeutralForeground2, 
+                        lineHeight: "1.5",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        display: "block"
+                      }}
+                    >
+                      {updateCheck.latest?.changelog || "暂无发布说明"}
                     </Text>
                   </div>
                 </div>
@@ -910,14 +870,21 @@ function App() {
 
             <div className={styles.footerSection}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Text className={styles.footerText} style={{ opacity: 0.8 }}>v{appVersion || "unknown"}</Text>
+                <Text 
+                  className={styles.footerText} 
+                  style={{ opacity: 0.8, cursor: "pointer" }}
+                  onClick={() => void checkForUpdate(true)}
+                  title="检查更新"
+                >
+                  v{appVersion || "unknown"}
+                </Text>
                 {updateCheck.status === "available" && (
                   <Badge 
                     size="small" 
                     color="important" 
                     appearance="filled" 
                     style={{ cursor: "pointer", fontSize: "10px" }}
-                    onClick={() => setUpdateDialogOpen(true)}
+                    onClick={() => void checkForUpdate(true)}
                   >
                     更新
                   </Badge>
@@ -950,6 +917,85 @@ function App() {
           />
         </div>
       </div>
+    </>
+  );
+}
+
+function App() {
+  const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">("system");
+  const [themeColor, setThemeColor] = useState<string>("windows");
+  const [windowsColor, setWindowsColor] = useState<string>("#0078d4");
+  const [isDark, setIsDark] = useState(false);
+
+  // Load theme configuration on mount
+  useEffect(() => {
+    const savedColor = localStorage.getItem("theme_color");
+    if (savedColor) {
+      setThemeColor(savedColor);
+    }
+    const savedMode = localStorage.getItem("theme_mode") as "light" | "dark" | "system";
+    if (savedMode) {
+      setThemeMode(savedMode);
+    }
+  }, []);
+
+  // Fetch Windows accent color when "windows" theme is active
+  useEffect(() => {
+    if (themeColor === "windows") {
+      invoke<string>("get_windows_accent_color")
+        .then((color) => {
+          setWindowsColor(color);
+        })
+        .catch((err) => {
+          console.error("Failed to get Windows accent color:", err);
+        });
+    }
+  }, [themeColor]);
+
+  // Determine system theme preference
+  useEffect(() => {
+    if (themeMode === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      setIsDark(mediaQuery.matches);
+      
+      const listener = (e: MediaQueryListEvent) => {
+        setIsDark(e.matches);
+      };
+      
+      mediaQuery.addEventListener("change", listener);
+      return () => mediaQuery.removeEventListener("change", listener);
+    } else {
+      setIsDark(themeMode === "dark");
+    }
+  }, [themeMode]);
+
+  let currentTheme = isDark ? webDarkTheme : webLightTheme;
+
+  const activeColor = themeColor === "windows" ? windowsColor : themeColor;
+
+  if (activeColor && activeColor !== "#0078d4") {
+    try {
+      const brand = generateBrandVariants(activeColor);
+      currentTheme = isDark ? createDarkTheme(brand) : createLightTheme(brand);
+    } catch (err) {
+      console.error("Failed to generate brand variants:", err);
+    }
+  }
+
+  const toasterId = useId("toaster");
+
+  return (
+    <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
+      <Toaster toasterId={toasterId} position="top-end" pauseOnHover pauseOnWindowBlur />
+      <AppContent 
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        themeColor={themeColor}
+        setThemeColor={setThemeColor}
+        windowsColor={windowsColor}
+        isDark={isDark}
+        toasterId={toasterId}
+      />
     </FluentProvider>
   );
 }
