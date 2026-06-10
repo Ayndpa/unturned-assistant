@@ -278,7 +278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     getVersion()
-      .then((version) => setAppVersion(version))
+      .then((_version) => setAppVersion("0.1.7")) // 强制设为旧版本用于测试更新
       .catch((err) => {
         console.error("Failed to get app version:", err);
         setAppVersion("unknown");
