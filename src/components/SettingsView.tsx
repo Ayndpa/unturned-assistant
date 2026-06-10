@@ -28,7 +28,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { FaGithub } from "react-icons/fa";
 import { GiCargoCrate } from "react-icons/gi";
 
@@ -164,7 +163,7 @@ const useStyles = makeStyles({
     ...shorthands.gap("12px"),
     marginTop: "4px",
     marginBottom: "4px",
-    flexWrap: "wrap", // Allow wrapping if there are many colors!
+    flexWrap: "wrap",
   },
   colorButton: {
     width: "28px",
@@ -202,18 +201,6 @@ const colorPresets = [
   { value: "#646f79", label: "简约灰 (Gray)", color: "#646f79" },
 ] as const;
 
-const normalizeVersion = (value: string): string =>
-  (value || "").trim().replace(/^v/i, "");
-
-const formatReleaseDate = (isoDate?: string): string => {
-  if (!isoDate) return "发布时间未知";
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return "发布时间异常";
-  return date.toLocaleString();
-};
-
-const formatSourceLabel = (source: string): string => source;
-
 type UpdateCheckStatus =
   | "idle"
   | "checking"
@@ -241,6 +228,7 @@ interface SettingsViewProps {
   themeColor: string;
   onChangeThemeColor: (color: string) => void;
   currentSystemColor: string;
+  onShowUpdateDialog?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -248,7 +236,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onChangeThemeMode,
   themeColor,
   onChangeThemeColor,
-  currentSystemColor
+  currentSystemColor,
+  onShowUpdateDialog
 }) => {
   const styles = useStyles();
   const [gamePath, setGamePath] = useState("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Unturned");
@@ -261,7 +250,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     latest: null,
     message: "点击“检查更新”以获取最新版本信息",
   });
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
   useEffect(() => {
     const savedPath = localStorage.getItem("unturned_game_path");
@@ -317,50 +305,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         },
         message: `发现新版本：v${update.version}。`,
       });
+      
+      if (onShowUpdateDialog) {
+        onShowUpdateDialog();
+      }
     } catch (err) {
       console.error("Update check failed:", err);
       setUpdateCheck({
         status: "error",
         latest: null,
         message: err instanceof Error ? err.message : "检查更新失败",
-      });
-    }
-  };
-
-  const handleDownloadUpdate = async () => {
-    try {
-      const update = await check();
-      if (!update) return;
-
-      setUpdateCheck((prev: UpdateCheckResult) => ({ ...prev, status: "downloading", message: "正在下载并安装更新..." }));
-      
-      let downloaded = 0;
-      let contentLength = 0;
-
-      await update.downloadAndInstall((event) => {
-        switch (event.event) {
-          case 'Started':
-            contentLength = event.data.contentLength || 0;
-            break;
-          case 'Progress':
-            downloaded += event.data.chunkLength;
-            if (contentLength > 0) {
-              setDownloadProgress(Math.round((downloaded / contentLength) * 100));
-            }
-            break;
-          case 'Finished':
-            break;
-        }
-      });
-
-      setUpdateCheck((prev: UpdateCheckResult) => ({ ...prev, message: "安装完成，正在重启..." }));
-      await relaunch();
-    } catch (err) {
-      console.error("Update failed:", err);
-      setUpdateCheck({
-        status: "error",
-        latest: null,
-        message: `更新失败: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   };
@@ -570,7 +524,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className={styles.aboutContent}>
               <div className={styles.aboutTitleRow}>
                 <span className={styles.aboutTitle}>Unturned 游戏助手</span>
-                <Badge color="brand" appearance="tint">v{appVersion || "unknown"}</Badge>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Badge color="brand" appearance="tint">v{appVersion || "unknown"}</Badge>
+                  {updateCheck.status === "available" && (
+                    <Badge 
+                      color="important" 
+                      appearance="filled" 
+                      style={{ cursor: "pointer" }}
+                      onClick={onShowUpdateDialog}
+                    >
+                      检测到新版本 (点击更新)
+                    </Badge>
+                  )}
+                </div>
               </div>
               <p className={styles.aboutDescription} style={{ margin: "4px 0 0 0" }}>
                 这是一款专为生存联机游戏《Unturned》打造的高效辅助桌面客户端。致力于为玩家提供优质便捷的代码查询、合成查询与地图支持。
@@ -579,74 +545,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div className={styles.aboutMetaSection}>
-            <div className={styles.aboutMetaRow}>
-              <div className={styles.aboutMetaLabel}>
-                <InfoRegular style={{ fontSize: "14px" }} /> 更新状态：
-              </div>
-              <div className={styles.aboutMetaBadgeContainer}>
-                <Badge appearance="outline">{updateCheck.status}</Badge>
-              </div>
-            </div>
-
-            <div className={styles.aboutMetaRow} style={{ marginTop: "4px" }}>
-              <div className={styles.aboutMetaLabel}>
-                <InfoRegular style={{ fontSize: "14px" }} /> 检查结果：
-              </div>
-              <div className={styles.aboutMetaBadgeContainer}>
-                <Body1 style={{ margin: 0 }}>{updateCheck.message}</Body1>
-              </div>
-            </div>
-
-            {updateCheck.latest && (
-              <div className={styles.aboutMetaRow} style={{ marginTop: "4px" }}>
-                <div className={styles.aboutMetaLabel}>
-                  <InfoRegular style={{ fontSize: "14px" }} /> 远端版本：
-                </div>
-                <div className={styles.aboutMetaBadgeContainer}>
-                  <Badge appearance="outline">v{normalizeVersion(updateCheck.latest.version)}</Badge>
-                  <Badge appearance="outline">{formatSourceLabel(updateCheck.latest.source)}</Badge>
-                  <Badge appearance="outline">{formatReleaseDate(updateCheck.latest.publishedAt)}</Badge>
-                </div>
-              </div>
-            )}
-
-            {updateCheck.status === "available" && (
-              <div className={styles.aboutActions} style={{ borderTop: "none", marginTop: "8px", paddingTop: "0px" }}>
-                <Button
-                  appearance="primary"
-                  onClick={handleDownloadUpdate}
-                >
-                  立即下载并安装
-                </Button>
-                <Button
-                  appearance="subtle"
-                  onClick={() => openUrl(`https://github.com/Ayndpa/unturned-assistant/releases/latest`)}
-                >
-                  手动下载
-                </Button>
-              </div>
-            )}
-
-            {updateCheck.status === "downloading" && (
-              <div className={styles.row} style={{ marginTop: "8px" }}>
-                <div style={{ height: "4px", width: "100%", backgroundColor: tokens.colorNeutralStroke3, borderRadius: "2px", overflow: "hidden" }}>
-                  <div 
-                    style={{ 
-                      height: "100%", 
-                      width: `${downloadProgress}%`, 
-                      backgroundColor: tokens.colorBrandBackground,
-                      transition: "width 0.3s ease" 
-                    }} 
-                  />
-                </div>
-                <Body1 style={{ fontSize: "12px", textAlign: "center", color: tokens.colorNeutralForeground4 }}>
-                  正在下载: {downloadProgress}%
-                </Body1>
-              </div>
-            )}
-
-            <Divider />
-
             <div className={styles.aboutMetaRow}>
               <div className={styles.aboutMetaLabel}>
                 <CodeRegular style={{ fontSize: "14px" }} /> 主要依赖：
@@ -670,6 +568,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className={mergeClasses(styles.aboutActions, "card-actions-area")}>
             <Button
+              style={{ flex: 1 }}
               appearance="primary"
               icon={<FaGithub />}
               onClick={() => openUrl("https://github.com/Ayndpa/unturned-assistant")}
@@ -677,6 +576,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               GitHub 仓库
             </Button>
             <Button
+              style={{ flex: 1 }}
               appearance="outline"
               onClick={() => openUrl("https://github.com/Ayndpa/unturned-assistant/issues")}
             >

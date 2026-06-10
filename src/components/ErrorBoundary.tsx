@@ -13,7 +13,7 @@ import {
   createLightTheme,
   BrandVariants,
 } from "@fluentui/react-components";
-import { ErrorCircleRegular, ArrowCounterclockwiseRegular, DismissRegular } from "@fluentui/react-icons";
+import { ErrorCircleRegular, ArrowCounterclockwiseRegular, DismissRegular, CopyRegular, CheckmarkRegular } from "@fluentui/react-icons";
 
 interface Props {
   children: ReactNode;
@@ -137,6 +137,7 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error | null; res
   const styles = useStyles();
   const [isDark, setIsDark] = useState(false);
   const [brandColor, setBrandColor] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const mode = localStorage.getItem("theme_mode");
@@ -167,6 +168,16 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error | null; res
     window.close();
   };
 
+  const handleCopy = () => {
+    if (error) {
+      const textToCopy = error.stack || error.message;
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  };
+
   return (
     <FluentProvider theme={theme}>
       <div className={styles.container}>
@@ -189,6 +200,13 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error | null; res
             onClick={resetErrorBoundary}
           >
             重新加载
+          </Button>
+          <Button 
+            icon={copied ? <CheckmarkRegular /> : <CopyRegular />}
+            onClick={handleCopy}
+            disabled={!error}
+          >
+            {copied ? "已复制" : "复制错误"}
           </Button>
           <Button 
             icon={<DismissRegular />}

@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Badge,
 } from "@fluentui/react-components";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -31,8 +32,13 @@ import {
   WrenchRegular,
   NavigationRegular,
   SparkleRegular,
+  ArrowDownloadRegular,
+  OpenRegular,
+  DismissRegular,
 } from "@fluentui/react-icons";
 import { getVersion } from "@tauri-apps/api/app";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { HomeView } from "./components/HomeView";
 import { IdSearchView } from "./components/IdSearchView";
 import { SettingsView } from "./components/SettingsView";
@@ -449,7 +455,53 @@ function App() {
     message: "",
     isNewer: false,
   });
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<string>("");
   const hasCheckedForUpdateRef = useRef(false);
+
+  const handleDownloadUpdate = async () => {
+    try {
+      const update = await check();
+      if (!update) {
+        setDownloadStatus("未找到可用更新");
+        return;
+      }
+
+      setIsDownloading(true);
+      setDownloadStatus("正在准备下载...");
+      
+      let downloaded = 0;
+      let contentLength = 0;
+
+      await update.downloadAndInstall((event) => {
+        switch (event.event) {
+          case 'Started':
+            contentLength = event.data.contentLength || 0;
+            setDownloadStatus("正在开始下载...");
+            break;
+          case 'Progress':
+            downloaded += event.data.chunkLength;
+            if (contentLength > 0) {
+              const progress = Math.round((downloaded / contentLength) * 100);
+              setDownloadProgress(progress);
+              setDownloadStatus(`正在下载: ${progress}%`);
+            }
+            break;
+          case 'Finished':
+            setDownloadStatus("下载完成，正在安装...");
+            break;
+        }
+      });
+
+      setDownloadStatus("安装完成，正在重启...");
+      await relaunch();
+    } catch (err) {
+      console.error("Update failed:", err);
+      setIsDownloading(false);
+      setDownloadStatus(`更新失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
 
   // Responsive listener
   useEffect(() => {
@@ -622,6 +674,7 @@ function App() {
             themeColor={themeColor}
             onChangeThemeColor={handleThemeColorChange}
             currentSystemColor={windowsColor}
+            onShowUpdateDialog={() => setUpdateDialogOpen(true)}
           />
         );
       case "maps":
@@ -653,45 +706,131 @@ function App() {
   return (
     <FluentProvider theme={currentTheme} style={{ backgroundColor: "transparent" }}>
       <Dialog open={updateDialogOpen} onOpenChange={(_, data) => setUpdateDialogOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>发现新版本</DialogTitle>
-            <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <Text style={{ color: tokens.colorNeutralForeground2 }}>
-                  当前版本：{normalizeDisplayVersion(appVersion)}
-                </Text>
-                <Text style={{ color: tokens.colorNeutralForeground2 }}>
-                  最新版本：{normalizeDisplayVersion(updateCheck.latest?.version || "")}
-                </Text>
-                <Text style={{ color: tokens.colorNeutralForeground2 }}>
-                  获取来源：{updateCheck.latest ? formatSourceLabel(updateCheck.latest.source) : "未解析"}
-                </Text>
-                <Text style={{ color: tokens.colorNeutralForeground3 }}>
-                  发布时间：{formatReleaseDate(updateCheck.latest?.publishedAt)}
-                </Text>
-                {updateCheck.latest?.releaseCommitMessage && (
-                  <Text style={{ color: tokens.colorNeutralForeground2, marginTop: "4px" }}>
-                    更新说明：{formatCommitMessage(updateCheck.latest.releaseCommitMessage)}
-                  </Text>
+        <DialogSurface style={{ padding: 0, overflow: "hidden", maxWidth: "460px" }}>
+          <DialogBody style={{ padding: 0, display: "flex", flexDirection: "column", width: "100%" }}>
+            <DialogTitle style={{ padding: "24px 24px 16px 24px", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <SparkleRegular style={{ color: tokens.colorBrandForeground1, fontSize: "24px" }} />
+                发现新版本
+              </div>
+            </DialogTitle>
+            <DialogContent style={{ padding: "0 24px 24px 24px", flex: 1 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {/* Version Card */}
+                <div style={{ 
+                  backgroundColor: tokens.colorNeutralBackground2,
+                  borderRadius: tokens.borderRadiusMedium,
+                  padding: "16px",
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <NavigationRegular style={{ fontSize: "16px", color: tokens.colorNeutralForeground3 }} />
+                      <Text size={200} weight="semibold">版本信息</Text>
+                    </div>
+                    <Badge appearance="tint" color="brand">v{normalizeVersion(updateCheck.latest?.version || "")}</Badge>
+                  </div>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>当前版本</Text>
+                      <Text size={200}>{normalizeDisplayVersion(appVersion)}</Text>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>发布时间</Text>
+                      <Text size={200}>{formatReleaseDate(updateCheck.latest?.publishedAt)}</Text>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Release Notes */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <Text size={200} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>更新说明</Text>
+                  <div style={{ 
+                    maxHeight: "100px", 
+                    overflowY: "auto", 
+                    padding: "8px 12px",
+                    backgroundColor: tokens.colorNeutralBackground3,
+                    borderRadius: tokens.borderRadiusSmall,
+                    borderLeft: `3px solid ${tokens.colorBrandForeground1}`
+                  }}>
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: "1.5" }}>
+                      {formatCommitMessage(updateCheck.latest?.releaseCommitMessage)}
+                    </Text>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                {isDownloading && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <Text size={100} weight="semibold">{downloadStatus}</Text>
+                      <Text size={100}>{downloadProgress}%</Text>
+                    </div>
+                    <div style={{ height: "6px", width: "100%", backgroundColor: tokens.colorNeutralStroke3, borderRadius: "3px", overflow: "hidden" }}>
+                      <div 
+                        style={{ 
+                          height: "100%", 
+                          width: `${downloadProgress}%`, 
+                          backgroundColor: tokens.colorBrandBackground,
+                          transition: "width 0.3s ease",
+                          backgroundImage: "linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent)",
+                          backgroundSize: "1rem 1rem"
+                        }} 
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" onClick={() => setUpdateDialogOpen(false)}>
-                稍后处理
+
+            <div style={{ 
+              display: "flex", 
+              gap: "12px",
+              padding: "16px 24px",
+              backgroundColor: tokens.colorNeutralBackground2,
+              borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+              width: "auto",
+              boxSizing: "border-box",
+              flexShrink: 0,
+              marginLeft: "0",
+              marginRight: "0",
+              alignSelf: "stretch"
+            }}>
+              <Button 
+                style={{ flex: 1 }}
+                appearance="subtle" 
+                icon={<DismissRegular />}
+                onClick={() => setUpdateDialogOpen(false)} 
+                disabled={isDownloading}
+              >
+                稍后
               </Button>
               <Button
-                appearance="primary"
+                style={{ flex: 1 }}
+                appearance="outline"
+                icon={<OpenRegular />}
                 onClick={() => {
                   const link = updateCheck.latest?.releaseUrl || UPDATE_REPO_URL;
                   void openUrl(link);
-                  setUpdateDialogOpen(false);
                 }}
+                disabled={isDownloading}
               >
-                前往下载
+                手动下载
               </Button>
-            </DialogActions>
+              <Button
+                style={{ flex: 1 }}
+                appearance="primary"
+                icon={<ArrowDownloadRegular />}
+                onClick={handleDownloadUpdate}
+                disabled={isDownloading}
+              >
+                立即安装
+              </Button>
+            </div>
           </DialogBody>
         </DialogSurface>
       </Dialog>
@@ -770,7 +909,20 @@ function App() {
             </div>
 
             <div className={styles.footerSection}>
-              <Text className={styles.footerText} style={{ opacity: 0.8 }}>v{appVersion || "unknown"}</Text>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Text className={styles.footerText} style={{ opacity: 0.8 }}>v{appVersion || "unknown"}</Text>
+                {updateCheck.status === "available" && (
+                  <Badge 
+                    size="small" 
+                    color="important" 
+                    appearance="filled" 
+                    style={{ cursor: "pointer", fontSize: "10px" }}
+                    onClick={() => setUpdateDialogOpen(true)}
+                  >
+                    更新
+                  </Badge>
+                )}
+              </div>
             </div>
           </aside>
 
