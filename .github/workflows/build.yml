@@ -17,11 +17,22 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}\.cargo
       CARGO_TARGET_DIR: ${{ github.workspace }}\src-tauri\target
       BUN_INSTALL: ${{ github.workspace }}\.bun
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       
+      - name: Verify Signing Key
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing! Check your GitHub Secrets."
+            exit 1
+          fi
+          echo "Signing key is present."
+
       - name: Setup Bun
         id: setup-bun
         uses: oven-sh/setup-bun@v2
@@ -78,3 +89,5 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true # 显式要求生成 updater JSON
+          includeRelease: true
