@@ -1,6 +1,6 @@
 [package]
 name = "unturned-assistant"
-version = "0.1.7"
+version = "0.1.9"
 description = "一个Unturned游戏助手"
 authors = ["ayndpa"]
 edition = "2021"
