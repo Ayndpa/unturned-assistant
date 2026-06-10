@@ -27,6 +27,8 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { FaGithub } from "react-icons/fa";
 import { GiCargoCrate } from "react-icons/gi";
 
@@ -200,120 +202,17 @@ const colorPresets = [
   { value: "#646f79", label: "简约灰 (Gray)", color: "#646f79" },
 ] as const;
 
-type GitHubUpdateSource = "release" | "repo_file";
-
-type UpdateCheckStatus =
-  | "idle"
-  | "checking"
-  | "upToDate"
-  | "available"
-  | "error";
-
-interface RemoteVersionInfo {
-  version: string;
-  source: GitHubUpdateSource;
-  releaseUrl?: string;
-  publishedAt?: string;
-}
-
-interface UpdateCheckResult {
-  status: UpdateCheckStatus;
-  latest: RemoteVersionInfo | null;
-  message: string;
-}
-
-const UPDATE_REPO_OWNER = "Ayndpa";
-const UPDATE_REPO_NAME = "unturned-assistant";
-const UPDATE_BRANCH = "main";
-const UPDATE_RELEASE_URL = `https://api.github.com/repos/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/releases/latest`;
-const UPDATE_PACKAGE_FILE_URL = `https://raw.githubusercontent.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}/${UPDATE_BRANCH}/package.json`;
-
 const normalizeVersion = (value: string): string =>
   (value || "").trim().replace(/^v/i, "");
 
-const compareVersions = (left: string, right: string): number => {
-  const leftParts = normalizeVersion(left).split(".").map((part) => Number.parseInt(part, 10) || 0);
-  const rightParts = normalizeVersion(right).split(".").map((part) => Number.parseInt(part, 10) || 0);
-  const length = Math.max(leftParts.length, rightParts.length);
-
-  for (let i = 0; i < length; i += 1) {
-    const a = leftParts[i] || 0;
-    const b = rightParts[i] || 0;
-    if (a > b) return 1;
-    if (a < b) return -1;
-  }
-
-  return 0;
-};
-
-const readReleaseVersion = async (): Promise<RemoteVersionInfo | null> => {
-  const response = await fetch(UPDATE_RELEASE_URL, {
-    headers: {
-      Accept: "application/vnd.github+json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`GitHub Release API 请求失败：${response.status}`);
-  }
-
-  const data = (await response.json()) as {
-    tag_name?: string;
-    html_url?: string;
-    published_at?: string;
-  };
-  const version = data.tag_name || data.html_url?.match(/\/tag\/(.+)$/)?.[1];
-
-  if (!version) return null;
-
-  return {
-    version,
-    source: "release",
-    releaseUrl: data.html_url,
-    publishedAt: data.published_at,
-  };
-};
-
-const readRepoPackageVersion = async (): Promise<RemoteVersionInfo | null> => {
-  const response = await fetch(UPDATE_PACKAGE_FILE_URL);
-  if (!response.ok) {
-    throw new Error(`版本文件请求失败：${response.status}`);
-  }
-
-  const raw = await response.text();
-  const parsed = JSON.parse(raw) as { version?: string };
-
-  if (!parsed?.version) return null;
-
-  return {
-    version: parsed.version,
-    source: "repo_file",
-  };
-};
-
-const fetchLatestRemoteVersion = async (): Promise<RemoteVersionInfo> => {
-  try {
-    const releaseInfo = await readReleaseVersion();
-    if (releaseInfo) return releaseInfo;
-  } catch (releaseError) {
-    console.warn("Release 版本获取失败，尝试回退到仓库版本文件:", releaseError);
-  }
-
-  const repoInfo = await readRepoPackageVersion();
-  if (repoInfo) return repoInfo;
-
-  throw new Error("GitHub 无法返回版本信息");
-};
-
 const formatReleaseDate = (isoDate?: string): string => {
-  if (!isoDate) return "未知发布时间";
+  if (!isoDate) return "发布时间未知";
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return "发布时间异常";
   return date.toLocaleString();
 };
 
-const formatSourceLabel = (source: GitHubUpdateSource): string =>
-  source === "release" ? "GitHub Release" : "仓库版本文件";
+const formatSourceLabel = (source: string): string => source;
 
 interface SettingsViewProps {
   themeMode: "light" | "dark" | "system";
@@ -341,6 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     latest: null,
     message: "点击“检查更新”以获取最新版本信息",
   });
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
   useEffect(() => {
     const savedPath = localStorage.getItem("unturned_game_path");
@@ -374,36 +274,72 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUpdateCheck({
       status: "checking",
       latest: null,
-      message: "正在请求 GitHub 更新信息...",
+      message: "正在检查更新...",
     });
     try {
-      const latest = await fetchLatestRemoteVersion();
-      const remote = normalizeVersion(latest.version);
-      const current = normalizeVersion(appVersion);
-      const hasCurrent = current.length > 0 && current !== "unknown";
-      const isNewer = hasCurrent && remote.length > 0 && compareVersions(remote, current) > 0;
-
-      if (!isNewer) {
+      const update = await check();
+      
+      if (!update) {
         setUpdateCheck({
           status: "upToDate",
-          latest,
-          message: hasCurrent
-            ? `当前已是最新版本（v${current}）`
-            : `当前版本：${current || "unknown"}，本地可用版本：v${remote}`,
+          latest: null,
+          message: `当前已是最新版本（v${appVersion}）`,
         });
         return;
       }
 
       setUpdateCheck({
         status: "available",
-        latest,
-        message: `发现新版本：v${remote}，来源：${formatSourceLabel(latest.source)}。`,
+        latest: {
+          version: update.version,
+          source: "GitHub Releases",
+        },
+        message: `发现新版本：v${update.version}。`,
       });
     } catch (err) {
+      console.error("Update check failed:", err);
       setUpdateCheck({
         status: "error",
         latest: null,
         message: err instanceof Error ? err.message : "检查更新失败",
+      });
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    try {
+      const update = await check();
+      if (!update) return;
+
+      setUpdateCheck(prev => ({ ...prev, status: "downloading", message: "正在下载并安装更新..." }));
+      
+      let downloaded = 0;
+      let contentLength = 0;
+
+      await update.downloadAndInstall((event) => {
+        switch (event.event) {
+          case 'Started':
+            contentLength = event.data.contentLength || 0;
+            break;
+          case 'Progress':
+            downloaded += event.data.chunkLength;
+            if (contentLength > 0) {
+              setDownloadProgress(Math.round((downloaded / contentLength) * 100));
+            }
+            break;
+          case 'Finished':
+            break;
+        }
+      });
+
+      setUpdateCheck(prev => ({ ...prev, message: "安装完成，正在重启..." }));
+      await relaunch();
+    } catch (err) {
+      console.error("Update failed:", err);
+      setUpdateCheck({
+        status: "error",
+        latest: null,
+        message: `更新失败: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   };
@@ -657,10 +593,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className={styles.aboutActions} style={{ borderTop: "none", marginTop: "8px", paddingTop: "0px" }}>
                 <Button
                   appearance="primary"
-                  onClick={() => openUrl(updateCheck.latest?.releaseUrl || `https://github.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}`)}
+                  onClick={handleDownloadUpdate}
                 >
-                  前往下载更新
+                  立即下载并安装
                 </Button>
+                <Button
+                  appearance="subtle"
+                  onClick={() => openUrl(`https://github.com/Ayndpa/unturned-assistant/releases/latest`)}
+                >
+                  手动下载
+                </Button>
+              </div>
+            )}
+
+            {updateCheck.status === "downloading" && (
+              <div className={styles.row} style={{ marginTop: "8px" }}>
+                <div style={{ height: "4px", width: "100%", backgroundColor: tokens.colorNeutralStroke3, borderRadius: "2px", overflow: "hidden" }}>
+                  <div 
+                    style={{ 
+                      height: "100%", 
+                      width: `${downloadProgress}%`, 
+                      backgroundColor: tokens.colorBrandBackground,
+                      transition: "width 0.3s ease" 
+                    }} 
+                  />
+                </div>
+                <Body1 style={{ fontSize: "12px", textAlign: "center", color: tokens.colorNeutralForeground4 }}>
+                  正在下载: {downloadProgress}%
+                </Body1>
               </div>
             )}
 

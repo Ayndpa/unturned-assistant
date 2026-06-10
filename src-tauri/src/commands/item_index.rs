@@ -11,7 +11,9 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crate::dat_parser::{parse_dat_file_with_blueprints, load_item_name_and_desc, map_type_to_category};
-use crate::models::UnturnedItem;
+use crate::models::{UnturnedItem, ItemIndexCache};
+
+const CURRENT_INDEX_VERSION: u32 = 1;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -171,9 +173,13 @@ pub async fn scan_unturned_directory(
     // Persist Cache with Bincode (High Performance)
     if let Ok(cache_dir) = app.path().app_data_dir() {
         let _ = std::fs::create_dir_all(&cache_dir);
-        let cache_file = cache_dir.join("item_index.bin");
+        let cache_file = cache_dir.join("item_index_v1.bin");
         if let Ok(mut file) = File::create(cache_file) {
-            let _ = bincode::serialize_into(&mut file, &sorted_items);
+            let cache_data = ItemIndexCache {
+                version: CURRENT_INDEX_VERSION,
+                items: sorted_items.clone(),
+            };
+            let _ = bincode::serialize_into(&mut file, &cache_data);
         }
     }
 
@@ -302,13 +308,26 @@ pub async fn resolve_item_icon(game_path: String, guid: String, is_vehicle: bool
 #[tauri::command]
 pub async fn load_cached_index(app: tauri::AppHandle) -> Result<Vec<UnturnedItem>, String> {
     if let Ok(cache_dir) = app.path().app_data_dir() {
-        let bin_cache = cache_dir.join("item_index.bin");
-        if bin_cache.exists() {
-            if let Ok(mut file) = File::open(bin_cache) {
-                if let Ok(items) = bincode::deserialize_from::<_, Vec<UnturnedItem>>(&mut file) {
-                    return Ok(items);
+        // 1. Try the new versioned cache file
+        let v1_cache = cache_dir.join("item_index_v1.bin");
+        if v1_cache.exists() {
+            if let Ok(mut file) = File::open(v1_cache) {
+                if let Ok(cache) = bincode::deserialize_from::<_, ItemIndexCache>(&mut file) {
+                    if cache.version == CURRENT_INDEX_VERSION {
+                        return Ok(cache.items);
+                    } else {
+                        return Err(format!("OUTDATED_VERSION:{}", cache.version));
+                    }
                 }
             }
+        }
+
+        // 2. Fallback: If new cache doesn't exist, check for legacy unversioned cache
+        let legacy_cache = cache_dir.join("item_index.bin");
+        if legacy_cache.exists() {
+            // We found an old file. Don't try to parse it (it might crash if mismatched),
+            // just tell the frontend it's outdated so the user can rebuild.
+            return Err("OUTDATED_VERSION:0".to_string());
         }
     }
     Err("No cache found".to_string())

@@ -220,7 +220,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
   // Find recipes where this item is used as an input
   const usages = useMemo(() => {
-    if (!selectedItem || !items) return [];
+    if (!selectedItem || !items || selectedItem.category === "vehicles") return [];
     const itemIdStr = selectedItem.id.toString();
     const itemGuid = selectedItem.guid;
 

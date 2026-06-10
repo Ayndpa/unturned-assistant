@@ -1,6 +1,6 @@
 [package]
 name = "unturned-assistant"
-version = "0.1.7"
+version = "0.1.8"
 description = "一个Unturned游戏助手"
 authors = ["ayndpa"]
 edition = "2021"
@@ -30,4 +30,5 @@ reqwest = { version = "0.12", default-features = false, features = ["default-tls
 zip = { version = "2.2.0", default-features = false, features = ["deflate"] }
 window-vibrancy = "0.7.1"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2.10.1"
 

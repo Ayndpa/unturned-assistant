@@ -32,6 +32,13 @@ pub struct UnturnedItem {
     pub blueprints: Option<Vec<Blueprint>>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemIndexCache {
+    pub version: u32,
+    pub items: Vec<UnturnedItem>,
+}
+
 /// Information about a single local disk drive.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

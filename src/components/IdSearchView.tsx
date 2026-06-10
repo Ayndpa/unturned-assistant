@@ -457,7 +457,11 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         }
       })
       .catch((err) => {
-        console.log("No cache found or failed to load.", err);
+        if (typeof err === "string" && err.startsWith("OUTDATED_VERSION:")) {
+          setSyncError("检测到本地索引版本已过时，请点击右侧「索引管理」重建索引以支持新功能。");
+        } else {
+          console.log("No cache found or failed to load.", err);
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -534,16 +538,31 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     });
   }, [items, searchQuery, selectedCategory]);
 
-  // Build lookup map by ID and GUID to resolve ingredients quickly
+  // Build lookup map by ID and GUID to resolve ingredients quickly.
+  // We prioritize items over vehicles because blueprints in Unturned only deal with items.
   const itemMap = useMemo(() => {
     const map: Record<string, UnturnedItem> = {};
+    
+    // First pass: add vehicles (lower priority)
     items.forEach((item) => {
-      map[item.id.toString()] = item;
-      if (item.guid) {
-        map[item.guid] = item;
-        map[item.guid.toLowerCase()] = item;
+      if (item.category === "vehicles") {
+        map[item.id.toString()] = item;
+        if (item.guid) {
+          map[item.guid.toLowerCase()] = item;
+        }
       }
     });
+
+    // Second pass: add items (higher priority)
+    items.forEach((item) => {
+      if (item.category !== "vehicles") {
+        map[item.id.toString()] = item;
+        if (item.guid) {
+          map[item.guid.toLowerCase()] = item;
+        }
+      }
+    });
+    
     return map;
   }, [items]);
 
