@@ -18,7 +18,7 @@ import {
   MenuItem,
   Input,
 } from "@fluentui/react-components";
-import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular } from "@fluentui/react-icons";
+import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular, SearchRegular, DismissRegular } from "@fluentui/react-icons";
 import { CATEGORIES, RARITY_COLORS, UnturnedItem } from "../../utils/types";
 import { renderRichText } from "../../utils/richText";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -119,7 +119,76 @@ const useStyles = makeStyles({
   },
   commandCopyButton: {
     flex: "0 0 auto",
-  }
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    marginBottom: "10px",
+    flexWrap: "wrap",
+  },
+  sectionSearchWrap: {
+    position: "relative",
+    flex: "1 1 180px",
+    minWidth: "120px",
+    maxWidth: "100%",
+  },
+  sectionSearchInput: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backdropFilter: "blur(8px)",
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke3),
+    borderRadius: tokens.borderRadiusMedium,
+    fontSize: "12px",
+    height: "28px",
+    ...shorthands.padding("0", "8px", "0", "30px"),
+    width: "100%",
+    boxSizing: "border-box",
+    color: tokens.colorNeutralForeground1,
+    "::placeholder": {
+      color: tokens.colorNeutralForeground4,
+    },
+    "&:hover": {
+      ...shorthands.borderColor(tokens.colorNeutralStroke2),
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+    },
+    "&:focus": {
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+      outline: "none",
+      boxShadow: `0 0 0 1px ${tokens.colorBrandStroke1}`,
+    },
+  },
+  sectionSearchIcon: {
+    position: "absolute",
+    left: "8px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: tokens.colorNeutralForeground4,
+    fontSize: "14px",
+    pointerEvents: "none",
+  },
+  sectionSearchClear: {
+    position: "absolute",
+    right: "4px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    minWidth: "20px",
+    width: "20px",
+    height: "20px",
+    ...shorthands.padding("0"),
+    backgroundColor: "transparent",
+    border: "none",
+    color: tokens.colorNeutralForeground4,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: tokens.borderRadiusSmall,
+    "&:hover": {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      color: tokens.colorNeutralForeground1,
+    },
+  },
 });
 
 interface ItemDetailPaneProps {
@@ -144,6 +213,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
   const styles = useStyles();
   const [iconUrl, setIconUrl] = useState<string | null>(null);
   const [recipeItemIcons, setRecipeItemIcons] = useState<Record<string, string | null>>({});
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [usageSearch, setUsageSearch] = useState("");
   const [commandTemplate, setCommandTemplate] = useState<string>(() => {
     return localStorage.getItem("unturned_command_template") || "/give <id>";
   });
@@ -199,8 +270,39 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     }
   }, [gamePath, selectedItem?.guid, selectedItem?.category]);
 
+  // Filter blueprints by recipe search
+  const filteredBlueprints = useMemo(() => {
+    if (!selectedItem?.blueprints) return [];
+    if (!recipeSearch.trim()) return selectedItem.blueprints;
+    const query = recipeSearch.trim().toLowerCase();
+    return selectedItem.blueprints.filter((bp) => {
+      // Match by input item name or id
+      const inputMatch = bp.inputs.some((input) => {
+        const resolved = resolveItem ? resolveItem(normalizeIdOrGuid(input.idOrGuid)) : null;
+        if (resolved) {
+          return resolved.name.toLowerCase().includes(query) || resolved.id.toString().includes(query);
+        }
+        return input.idOrGuid.toLowerCase().includes(query);
+      });
+      // Match by output item name or id
+      const outputMatch = (bp.outputs && bp.outputs.length > 0 ? bp.outputs : [{ idOrGuid: selectedItem.id.toString(), amount: 1, isTool: false }]).some((output) => {
+        const resolved = resolveItem ? resolveItem(normalizeIdOrGuid(output.idOrGuid)) : null;
+        if (resolved) {
+          return resolved.name.toLowerCase().includes(query) || resolved.id.toString().includes(query);
+        }
+        return output.idOrGuid.toLowerCase().includes(query);
+      });
+      // Match by skill or type
+      const skillMatch = bp.skill?.toLowerCase().includes(query);
+      const typeMatch = bp.typeOrCategory?.toLowerCase().includes(query);
+      return inputMatch || outputMatch || skillMatch || typeMatch;
+    });
+  }, [selectedItem?.blueprints, recipeSearch, resolveItem, selectedItem?.id]);
+
   useEffect(() => {
     setRecipeItemIcons({});
+    setRecipeSearch("");
+    setUsageSearch("");
   }, [selectedItem?.id]);
 
   const recipeRelatedItemIds = useMemo(() => {
@@ -226,6 +328,13 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     const itemGuid = selectedItem.guid;
 
     return items.filter((item) => {
+      // Don't show the selected item itself in the usages list (meaningless to craft itself)
+      if (
+        item.id === selectedItem.id ||
+        (itemGuid && item.guid && item.guid.toLowerCase() === itemGuid.toLowerCase())
+      ) {
+        return false;
+      }
       if (!item.blueprints) return false;
       return item.blueprints.some((bp) => {
         return bp.inputs.some((input) => {
@@ -237,6 +346,15 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
       });
     });
   }, [selectedItem, items]);
+
+  // Filter usages by usage search
+  const filteredUsages = useMemo(() => {
+    if (!usageSearch.trim()) return usages;
+    const query = usageSearch.trim().toLowerCase();
+    return usages.filter((item) => {
+      return item.name.toLowerCase().includes(query) || item.id.toString().includes(query);
+    });
+  }, [usages, usageSearch]);
 
   const recipeIconLookupIds = useMemo(() => {
     const ids = new Set<string>(recipeRelatedItemIds);
@@ -553,13 +671,34 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
       {/* Synthesize Recipes (How to craft) */}
       <div>
-        <Text weight="semibold" style={{ display: "block", marginBottom: "10px" }}>
-          🔨 合成配方 (如何制作)
-        </Text>
+        <div className={styles.sectionHeader}>
+          <Text weight="semibold">🔨 合成配方 (如何制作)</Text>
+          {selectedItem.blueprints && selectedItem.blueprints.length > 1 && (
+            <div className={styles.sectionSearchWrap}>
+              <SearchRegular className={styles.sectionSearchIcon} />
+              <input
+                className={styles.sectionSearchInput}
+                placeholder="搜索材料、产物..."
+                value={recipeSearch}
+                onChange={(e) => setRecipeSearch(e.target.value)}
+              />
+              {recipeSearch && (
+                <button
+                  className={styles.sectionSearchClear}
+                  onClick={() => setRecipeSearch("")}
+                  title="清除搜索"
+                >
+                  <DismissRegular style={{ fontSize: "12px" }} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {selectedItem.blueprints && selectedItem.blueprints.length > 0 ? (
+          filteredBlueprints.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {selectedItem.blueprints.map((bp, index) => (
+            {filteredBlueprints.map((bp, index) => (
               <div
                 key={index}
                 style={{
@@ -576,7 +715,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
                 {/* Recipe Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Badge appearance="outline" color="brand">
-                    配方 {selectedItem.blueprints!.length > 1 ? `#${index + 1}` : ""}
+                    配方 {filteredBlueprints.length > 1 ? `#${index + 1}` : ""}
                   </Badge>
                   {bp.skill && (
                     <Badge appearance="tint" color="warning" icon={<WrenchRegular />} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -605,20 +744,33 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
                   )}
                 </div>
 
-                {/* Output indicator if multiple or different amount */}
-                {bp.outputs.length > 0 && (bp.outputs[0].amount > 1 || bp.outputs[0].idOrGuid !== selectedItem.id.toString()) && (
-                  <div style={{ display: "flex", flexDirection: "column", borderTop: `1px dashed ${tokens.colorNeutralStroke2}`, paddingTop: "8px", marginTop: "4px" }}>
-                    <Caption1 style={{ color: tokens.colorNeutralForeground4, marginBottom: "6px", fontWeight: "bold" }}>
-                      合成产物：
-                    </Caption1>
-                    {bp.outputs.map((out) =>
-                      renderItemButton(out.idOrGuid, out.amount, false)
-                    )}
-                  </div>
-                )}
+                {/* Outputs Section (default to the item itself if outputs array is empty/undefined) */}
+                {(() => {
+                  const displayOutputs = (bp.outputs && bp.outputs.length > 0)
+                    ? bp.outputs
+                    : [{ idOrGuid: selectedItem.id.toString(), amount: 1, isTool: false }];
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", borderTop: `1px dashed ${tokens.colorNeutralStroke2}`, paddingTop: "8px", marginTop: "4px" }}>
+                      <Caption1 style={{ color: tokens.colorNeutralForeground4, marginBottom: "6px", fontWeight: "bold" }}>
+                        合成产物：
+                      </Caption1>
+                      {displayOutputs.map((out) =>
+                        renderItemButton(out.idOrGuid, out.amount, false)
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
+          ) : (
+            <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
+                没有匹配「{recipeSearch}」的合成配方。
+              </Text>
+            </Card>
+          )
         ) : (
           <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
@@ -632,16 +784,44 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
       {/* Downstream Usages (What this crafts) */}
       <div>
-        <Text weight="semibold" style={{ display: "block", marginBottom: "10px" }}>
-          💡 物品用途 (可合成什么)
-        </Text>
+        <div className={styles.sectionHeader}>
+          <Text weight="semibold">💡 物品用途 (可合成什么)</Text>
+          {usages.length > 5 && (
+            <div className={styles.sectionSearchWrap}>
+              <SearchRegular className={styles.sectionSearchIcon} />
+              <input
+                className={styles.sectionSearchInput}
+                placeholder="搜索物品名称或 ID..."
+                value={usageSearch}
+                onChange={(e) => setUsageSearch(e.target.value)}
+              />
+              {usageSearch && (
+                <button
+                  className={styles.sectionSearchClear}
+                  onClick={() => setUsageSearch("")}
+                  title="清除搜索"
+                >
+                  <DismissRegular style={{ fontSize: "12px" }} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {usages.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {usages.map((usageItem) =>
+          filteredUsages.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "0 4px" }}>
+            {filteredUsages.map((usageItem) =>
               renderItemButton(usageItem.id.toString(), 1, false)
             )}
           </div>
+          ) : (
+            <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
+                没有匹配「{usageSearch}」的用途物品。
+              </Text>
+            </Card>
+          )
         ) : (
           <Card style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(4px)", padding: "12px", border: "none" }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground4 }}>
