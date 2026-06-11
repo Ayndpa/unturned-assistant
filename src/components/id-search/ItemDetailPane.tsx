@@ -20,6 +20,7 @@ import {
 } from "@fluentui/react-components";
 import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular } from "@fluentui/react-icons";
 import { CATEGORIES, RARITY_COLORS, UnturnedItem } from "../../utils/types";
+import { renderRichText } from "../../utils/richText";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
 const useStyles = makeStyles({
@@ -543,8 +544,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
         <Text weight="semibold">物品描述</Text>
-        <Text style={{ color: tokens.colorNeutralForeground2, lineHeight: "20px" }}>
-          {selectedItem.description}
+        <Text style={{ color: tokens.colorNeutralForeground2, lineHeight: "20px", whiteSpace: "pre-wrap" }}>
+          {renderRichText(selectedItem.description)}
         </Text>
       </div>
 
