@@ -19,7 +19,7 @@ import {
   Input,
 } from "@fluentui/react-components";
 import { CopyRegular, ClipboardRegular, WrenchRegular, InfoRegular, ChevronDownRegular, SearchRegular, DismissRegular } from "@fluentui/react-icons";
-import { CATEGORIES, RARITY_COLORS, UnturnedItem } from "../../utils/types";
+import { CATEGORIES, getRarityColor, UnturnedItem } from "../../utils/types";
 import { renderRichText } from "../../utils/richText";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
@@ -468,7 +468,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
     }
 
     const { primary, secondary } = getBilingualNames(targetItem.name);
-    const rColor = RARITY_COLORS[targetItem.rarity];
+    const rColor = getRarityColor(targetItem.rarity);
     const iconSrc = recipeItemIcons[normalizedIdOrGuid];
 
     return (
@@ -561,6 +561,7 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
   }
 
   const bilingualNames = getBilingualNames(selectedItem.name);
+  const selectedRarityColor = getRarityColor(selectedItem.rarity);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -585,8 +586,8 @@ export const ItemDetailPane: React.FC<ItemDetailPaneProps> = ({
           <span
             className={styles.rarityBadge}
             style={{
-              color: RARITY_COLORS[selectedItem.rarity].color,
-              backgroundColor: RARITY_COLORS[selectedItem.rarity].bg,
+              color: selectedRarityColor.color,
+              backgroundColor: selectedRarityColor.bg,
               fontSize: "12px",
               padding: "4px 10px",
             }}

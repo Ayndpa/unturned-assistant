@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Card, Text, Badge, makeStyles, shorthands, tokens, mergeClasses } from "@fluentui/react-components";
-import { RARITY_COLORS, UnturnedItem } from "../../utils/types";
+import { getRarityColor, UnturnedItem } from "../../utils/types";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
 const useStyles = makeStyles({
@@ -120,7 +120,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, isSelected, gamePath, 
   }, [gamePath, item.guid, item.category, refreshKey]);
 
 
-  const rColor = RARITY_COLORS[item.rarity];
+  const rColor = getRarityColor(item.rarity);
 
   const nameMatch = item.name.match(/^(.*?)\s*\((.*?)\)$/);
   let primaryName = item.name;

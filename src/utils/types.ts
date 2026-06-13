@@ -19,7 +19,7 @@ export interface UnturnedItem {
   name: string;
   category: 'weapons' | 'ammo' | 'apparel' | 'vehicles' | 'medical' | 'structures' | 'resources';
   description: string;
-  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary' | 'Mythical';
+  rarity: string;
   blueprints?: Blueprint[];
 }
 
@@ -34,11 +34,18 @@ export const CATEGORIES = [
   { key: 'resources', label: '材料/工具' },
 ];
 
-export const RARITY_COLORS: Record<UnturnedItem['rarity'], { color: string; bg: string }> = {
+export const DEFAULT_RARITY_COLOR = { color: '#616161', bg: '#eeeeee' };
+
+export const RARITY_COLORS: Record<string, { color: string; bg: string }> = {
   Common: { color: '#808080', bg: '#f0f0f0' },
   Uncommon: { color: '#1f8b4c', bg: '#e8f5e9' },
   Rare: { color: '#2062af', bg: '#e3f2fd' },
   Epic: { color: '#a030d0', bg: '#f3e5f5' },
   Legendary: { color: '#e67e22', bg: '#fff3e0' },
   Mythical: { color: '#e74c3c', bg: '#ffebee' },
+};
+
+export const getRarityColor = (rarity?: string | null) => {
+  if (!rarity) return DEFAULT_RARITY_COLOR;
+  return RARITY_COLORS[rarity] || DEFAULT_RARITY_COLOR;
 };
