@@ -424,17 +424,26 @@ function AppContent({
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<string>("");
   const hasCheckedForUpdateRef = useRef(false);
+  const isDownloadingRef = useRef(false);
 
   const handleDownloadUpdate = async () => {
+    if (isDownloadingRef.current) {
+      return;
+    }
+
+    isDownloadingRef.current = true;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setDownloadStatus("正在准备下载...");
+
     try {
       const update = await check();
       if (!update) {
+        isDownloadingRef.current = false;
+        setIsDownloading(false);
         setDownloadStatus("未找到可用更新");
         return;
       }
-
-      setIsDownloading(true);
-      setDownloadStatus("正在准备下载...");
       
       let downloaded = 0;
       let contentLength = 0;
@@ -463,6 +472,7 @@ function AppContent({
       await relaunch();
     } catch (err) {
       console.error("Update failed:", err);
+      isDownloadingRef.current = false;
       setIsDownloading(false);
       setDownloadStatus(`更新失败: ${err instanceof Error ? err.message : String(err)}`);
     }

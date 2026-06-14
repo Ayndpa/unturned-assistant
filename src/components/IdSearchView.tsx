@@ -28,13 +28,16 @@ import {
   TeachingPopoverHeader,
   TeachingPopoverBody,
   TeachingPopoverTitle,
+  Dropdown,
+  Option,
 } from "@fluentui/react-components";
 import {
   SearchRegular,
   ArrowSyncRegular,
   SettingsRegular,
   LibraryRegular,
-  DismissRegular
+  DismissRegular,
+  ErrorCircleRegular
 } from "@fluentui/react-icons";
 import { CATEGORIES, UnturnedItem } from "../utils/types";
 import { invoke } from "@tauri-apps/api/core";
@@ -299,6 +302,46 @@ interface IdSearchViewProps {
   onNavigate: (page: string) => void;
 }
 
+// ── Cloud sync helpers ────────────────────────────────────────────────────────
+
+const CLOUD_SYNC_STORAGE_KEY = "cloud_last_sync_info";
+
+interface LastSyncInfo {
+  timestamp: number;
+  itemCount: number;
+}
+
+function getLastSyncInfo(): LastSyncInfo | null {
+  try {
+    const raw = localStorage.getItem(CLOUD_SYNC_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as LastSyncInfo;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastSyncInfo(itemCount: number): void {
+  try {
+    const info: LastSyncInfo = { timestamp: Date.now(), itemCount };
+    localStorage.setItem(CLOUD_SYNC_STORAGE_KEY, JSON.stringify(info));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+/**
+ * Decide whether to trigger a cloud sync.
+ * Syncs only if:
+ *  - Never synced before
+ *  - Item count changed (local index was rebuilt)
+ */
+function shouldSyncToCloud(currentItemCount: number): boolean {
+  const last = getLastSyncInfo();
+  if (!last) return true;
+  return last.itemCount !== currentItemCount;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
@@ -311,6 +354,8 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [hasMissingIcons, setHasMissingIcons] = useState(false);
   const [isIndexingImages, setIsIndexingImages] = useState(false);
@@ -330,6 +375,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   }, [hasMissingIcons]);
 
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedWorkshop, setSelectedWorkshop] = useState("all");
   const [selectedItem, setSelectedItem] = useState<UnturnedItem | null>(null);
   const [showCopyAlert, setShowCopyAlert] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState("");
@@ -447,21 +493,79 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         .catch(err => console.error("Failed to check if module is installed", err));
     }
 
+    // Step 1: Try loading local cached index
     invoke<UnturnedItem[]>("load_cached_index")
       .then((loadedItems) => {
         if (loadedItems && loadedItems.length > 0) {
-          // Wrap state updates to keep UI responsive
           setItems(loadedItems);
-          // Only select the first item if nothing is selected
           setSelectedItem(prev => prev || loadedItems[0]);
+        }
+        // Step 2: Check if cloud sync is needed
+        if (shouldSyncToCloud(loadedItems?.length ?? 0)) {
+          setCloudSyncStatus("syncing");
+          setCloudSyncMessage("正在同步本地数据到云端...");
+          invoke<{ uploaded: number; skipped: number }>("sync_local_to_cloud", {
+            items: loadedItems,
+            preferredLang: "Chinese",
+          })
+            .then((result) => {
+              setCloudSyncStatus("done");
+              setCloudSyncMessage(
+                `云同步完成：新增 ${result.uploaded} 条，跳过 ${result.skipped} 条。`
+              );
+              saveLastSyncInfo(loadedItems?.length ?? 0);
+            })
+            .catch((syncErr) => {
+              console.warn("Cloud sync failed:", syncErr);
+              setCloudSyncStatus("error");
+              setCloudSyncMessage(
+                typeof syncErr === "string" ? syncErr : "云同步失败（不影响本地使用）"
+              );
+            });
+        } else {
+          setCloudSyncStatus("done");
+          setCloudSyncMessage("数据未变化，跳过云端同步。");
         }
       })
       .catch((err) => {
+        // Step 3: Local cache failed → try loading from cloud
         if (typeof err === "string" && err.startsWith("OUTDATED_VERSION:")) {
           setSyncError("检测到本地索引版本已过时，请点击右侧「索引管理」重建索引以支持新功能。");
-        } else {
-          console.log("No cache found or failed to load.", err);
+          setIsLoading(false);
+          return;
         }
+
+        console.log("No local cache found, trying cloud index...");
+        setCloudSyncStatus("syncing");
+        setCloudSyncMessage("正在从云端加载物品索引...");
+
+        invoke<UnturnedItem[]>("load_cloud_index", { preferredLang: "Chinese" })
+          .then((cloudItems) => {
+            if (cloudItems && cloudItems.length > 0) {
+              setItems(cloudItems);
+              setSelectedItem(cloudItems[0]);
+              setCloudSyncStatus("done");
+              setCloudSyncMessage(
+                `已从云端加载 ${cloudItems.length} 条物品数据。`
+              );
+              // Save cloud data to local cache for next time
+              invoke("save_cached_index", { items: cloudItems }).catch((saveErr) => {
+                console.warn("Failed to save cloud index to local cache:", saveErr);
+              });
+            } else {
+              setCloudSyncStatus("error");
+              setCloudSyncMessage("云端数据库为空，请先重建本地索引以同步数据。");
+            }
+          })
+          .catch((cloudErr) => {
+            console.warn("Cloud index load also failed:", cloudErr);
+            setCloudSyncStatus("error");
+            setCloudSyncMessage(
+              typeof cloudErr === "string"
+                ? cloudErr
+                : "无法连接云端数据库，请检查网络或重建本地索引。"
+            );
+          });
       })
       .finally(() => {
         setIsLoading(false);
@@ -471,11 +575,32 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   // Set up event listener for indexing progress
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    
+
     const setupListener = async () => {
       const unsubscribe = await listen<IndexingProgress>("indexing-progress", (event) => {
         setIndexingProgress(event.payload);
       });
+      unlisten = unsubscribe;
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  // Set up event listener for cloud sync progress
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      const unsubscribe = await listen<{ current: number; total: number; message: string }>(
+        "cloud-sync-progress",
+        (event) => {
+          setCloudSyncMessage(event.payload.message);
+        }
+      );
       unlisten = unsubscribe;
     };
 
@@ -497,7 +622,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
   // Reset visible items count when filter or items change
   useEffect(() => {
     setVisibleCount(50);
-  }, [searchQuery, selectedCategory, items]);
+  }, [searchQuery, selectedCategory, selectedWorkshop, items]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
@@ -522,21 +647,45 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
     return stats;
   }, [items]);
 
+  // Compute unique workshop mods from items
+  const workshopList = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of items) {
+      const wid = item.workshopId || "";
+      map.set(wid, (map.get(wid) || 0) + 1);
+    }
+    // Sort: base game ("") first, then by count descending
+    const entries = Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === "") return -1;
+      if (b[0] === "") return 1;
+      return b[1] - a[1];
+    });
+    return entries.map(([id, count]) => ({
+      id,
+      label: id ? `Mod ${id}` : "基础游戏",
+      count,
+    }));
+  }, [items]);
+
   const filteredItems = useMemo(() => {
-    if (!searchQuery && selectedCategory === "all") return items;
-    
     const query = searchQuery.toLowerCase();
     return items.filter((item) => {
       const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
       if (!matchesCategory) return false;
 
+      const matchesWorkshop =
+        selectedWorkshop === "all" || (item.workshopId || "") === selectedWorkshop;
+      if (!matchesWorkshop) return false;
+
       if (!query) return true;
-      
-      return (item.name || "").toLowerCase().includes(query) ||
-             (item.id !== undefined && item.id !== null && item.id.toString().includes(query)) ||
-             (item.description || "").toLowerCase().includes(query);
+
+      return (
+        (item.name || "").toLowerCase().includes(query) ||
+        (item.id !== undefined && item.id !== null && item.id.toString().includes(query)) ||
+        (item.description || "").toLowerCase().includes(query)
+      );
     });
-  }, [items, searchQuery, selectedCategory]);
+  }, [items, searchQuery, selectedCategory, selectedWorkshop]);
 
   // Build lookup map by ID and GUID to resolve ingredients quickly.
   // We prioritize items over vehicles because blueprints in Unturned only deal with items.
@@ -598,6 +747,27 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
       if (loadedItems && loadedItems.length > 0) {
         setItems(loadedItems);
         setSelectedItem(loadedItems[0]);
+
+        // Background sync newly scanned items to cloud
+        setCloudSyncStatus("syncing");
+        setCloudSyncMessage("正在同步本地数据到云端...");
+        invoke<{ uploaded: number; skipped: number }>("sync_local_to_cloud", {
+          items: loadedItems,
+          preferredLang: "Chinese",
+        })
+          .then((result) => {
+            setCloudSyncStatus("done");
+            setCloudSyncMessage(
+              `云同步完成：新增 ${result.uploaded} 条，跳过 ${result.skipped} 条。`
+            );
+          })
+          .catch((syncErr) => {
+            console.warn("Cloud sync failed after scan:", syncErr);
+            setCloudSyncStatus("error");
+            setCloudSyncMessage(
+              typeof syncErr === "string" ? syncErr : "云同步失败（不影响本地使用）"
+            );
+          });
       } else {
         setSyncError("未在指定目录中扫描到任何有效的物品或车辆数据。");
       }
@@ -717,6 +887,25 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
             解析 Unturned 物品与载具配置可能需要几秒钟，请稍候。
           </Text>
         </>
+      ) : cloudSyncStatus === "syncing" ? (
+        <>
+          <Spinner size="huge" label="正在从云端同步物品索引..." labelPosition="below" />
+          <Text size={300} style={{ color: tokens.colorNeutralForeground4, maxWidth: "300px", textAlign: "center" }}>
+            本地未找到索引数据，正在尝试从云端加载，请稍候。
+          </Text>
+        </>
+      ) : cloudSyncStatus === "error" ? (
+        <>
+          <ErrorCircleRegular style={{ fontSize: "48px", color: tokens.colorRedForeground1 }} />
+          <Text size={300} style={{ color: tokens.colorNeutralForeground3, textAlign: "center", maxWidth: "350px" }}>
+            {cloudSyncMessage || "无法连接云端数据库，请检查网络或重建本地索引。"}
+          </Text>
+          {gamePath && (
+            <Button appearance="primary" icon={<ArrowSyncRegular />} onClick={handleSync} style={{ marginTop: "8px" }}>
+              一键重建数据索引
+            </Button>
+          )}
+        </>
       ) : (
         <>
           {gamePath ? (
@@ -820,6 +1009,25 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
               value={inputValue}
               onChange={(_, data) => setInputValue(data.value)}
             />
+
+            {workshopList.length > 1 && (
+              <Dropdown
+                placeholder="模组筛选"
+                value={selectedWorkshop === "all" ? "全部模组" : workshopList.find(w => w.id === selectedWorkshop)?.label || selectedWorkshop}
+                selectedOptions={[selectedWorkshop]}
+                onOptionSelect={(_, data) => setSelectedWorkshop(data.optionValue as string)}
+                style={{ minWidth: "140px", flex: "0 0 auto" }}
+              >
+                <Option value="all" text="全部模组">
+                  全部模组
+                </Option>
+                {workshopList.map((w) => (
+                  <Option key={w.id || "base"} value={w.id} text={w.label}>
+                    {w.label}（{w.count}）
+                  </Option>
+                ))}
+              </Dropdown>
+            )}
             
             <TeachingPopover
               open={isTeachingPopoverOpen}
@@ -879,7 +1087,11 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
 
         {isLoading ? (
           <div className={styles.emptyState} style={{ gap: "16px", padding: "32px", boxSizing: "border-box" }}>
-            <Spinner size="huge" label="正在读取本地缓存索引..." labelPosition="below" />
+            <Spinner
+              size="huge"
+              label={cloudSyncStatus === "syncing" ? "正在从云端同步物品索引..." : "正在读取本地缓存索引..."}
+              labelPosition="below"
+            />
           </div>
         ) : items.length === 0 ? (
           renderEmptyLeftPane()
@@ -963,6 +1175,8 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
               isIndexingImages={isIndexingImages}
               isRemovingModule={isRemovingModule}
               isImageIndexModuleInstalled={isImageIndexModuleInstalled}
+              cloudSyncStatus={cloudSyncStatus}
+              cloudSyncMessage={cloudSyncMessage}
               onSync={handleSync}
               onAddExtraPath={handleAddExtraPath}
               onRemoveExtraPath={handleRemoveExtraPath}

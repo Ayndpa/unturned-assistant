@@ -30,6 +30,8 @@ pub struct UnturnedItem {
     pub description: String,
     pub rarity: String,
     pub blueprints: Option<Vec<Blueprint>>,
+    /// Steam Workshop ID for mod items. None/empty for base game items.
+    pub workshop_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,4 +67,14 @@ pub struct SystemPageFileStatus {
     pub automatic_managed: bool,
     pub page_files: Vec<PageFileEntry>,
     pub disks: Vec<DiskInfo>,
+}
+
+/// Result of a cloud sync operation.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResult {
+    /// Number of items uploaded to the cloud.
+    pub uploaded: usize,
+    /// Number of items skipped (already exist in the cloud).
+    pub skipped: usize,
 }

@@ -50,13 +50,14 @@ body {
 }
 
 /* Global Component Transparency Overrides */
-.fui-Card, 
+.fui-Card,
 .fui-CardPreview,
 .fui-AccordionItem,
 .fui-Input,
 .fui-Input__input,
 .fui-Combobox,
 .fui-Combobox__input,
+.fui-Dropdown,
 .fui-Listbox,
 .fui-Option,
 .fui-Button:not(.fui-Button--primary),
@@ -97,6 +98,7 @@ body {
 [data-theme="dark"] .fui-Input__input,
 [data-theme="dark"] .fui-Combobox,
 [data-theme="dark"] .fui-Combobox__input,
+[data-theme="dark"] .fui-Dropdown,
 [data-theme="dark"] .fui-Listbox,
 [data-theme="dark"] .fui-Option,
 [data-theme="dark"] .fui-Button:not(.fui-Button--primary),

@@ -13,6 +13,30 @@ use walkdir::WalkDir;
 use crate::dat_parser::{
     load_item_name_and_desc, map_type_to_category, parse_dat_file_with_blueprints,
 };
+
+/// Extract Steam Workshop ID from a file path.
+/// Looks for the pattern `.../workshop/content/304930/<WorkshopID>/...` in the path.
+/// Returns None for base game items or paths that don't match the pattern.
+fn extract_workshop_id(path: &Path) -> Option<String> {
+    let components: Vec<&str> = path
+        .components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .collect();
+
+    for i in 0..components.len().saturating_sub(3) {
+        if components[i].eq_ignore_ascii_case("workshop")
+            && components[i + 1].eq_ignore_ascii_case("content")
+            && components[i + 2] == "304930"
+            && i + 3 < components.len()
+        {
+            let id = components[i + 3];
+            if !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
+                return Some(id.to_string());
+            }
+        }
+    }
+    None
+}
 use crate::models::{ItemIndexCache, UnturnedItem};
 
 const CURRENT_INDEX_VERSION: u32 = 1;
@@ -224,6 +248,7 @@ pub async fn scan_unturned_directory(
                 } else {
                     Some(blueprints)
                 },
+                workshop_id: extract_workshop_id(path),
             })
         })
         .collect();
@@ -417,6 +442,25 @@ pub async fn load_cached_index(app: tauri::AppHandle) -> Result<Vec<UnturnedItem
         }
     }
     Err("No cache found".to_string())
+}
+
+/// Save items to the local bincode cache (used after loading from cloud).
+#[tauri::command]
+pub async fn save_cached_index(app: tauri::AppHandle, items: Vec<UnturnedItem>) -> Result<(), String> {
+    if let Ok(cache_dir) = app.path().app_data_dir() {
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let cache_file = cache_dir.join("item_index_v1.bin");
+        if let Ok(mut file) = File::create(cache_file) {
+            let cache_data = ItemIndexCache {
+                version: CURRENT_INDEX_VERSION,
+                items,
+            };
+            bincode::serialize_into(&mut file, &cache_data)
+                .map_err(|e| format!("序列化缓存失败: {}", e))?;
+            return Ok(());
+        }
+    }
+    Err("无法写入缓存文件".to_string())
 }
 
 /// Verify that the supplied path points to a valid Unturned installation.

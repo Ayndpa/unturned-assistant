@@ -24,3 +24,6 @@ dist-ssr
 
 # Game files
 /game/
+
+# Turso local dev credentials
+turso_config.json

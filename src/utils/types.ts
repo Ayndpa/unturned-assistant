@@ -21,6 +21,8 @@ export interface UnturnedItem {
   description: string;
   rarity: string;
   blueprints?: Blueprint[];
+  /** Steam Workshop ID for mod items. Empty/undefined for base game items. */
+  workshopId?: string;
 }
 
 export const CATEGORIES = [

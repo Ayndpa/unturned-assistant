@@ -2,7 +2,7 @@ mod commands;
 mod dat_parser;
 mod models;
 
-use commands::{ai_translation::*, ime::*, item_index::*, localization::*, pagefile::*, theme::*};
+use commands::{ai_translation::*, cloud_sync::*, ime::*, item_index::*, localization::*, pagefile::*, theme::*};
 use tauri::{webview::Color, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -59,6 +59,9 @@ pub fn run() {
             translate_and_write_schinese,
             fetch_available_models,
             test_model_availability,
+            load_cloud_index,
+            sync_local_to_cloud,
+            save_cached_index,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

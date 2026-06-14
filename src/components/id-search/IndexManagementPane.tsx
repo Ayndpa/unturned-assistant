@@ -21,7 +21,9 @@ import {
   FolderAddRegular,
   DismissRegular,
   FolderRegular,
-  ImageSearchRegular
+  ImageSearchRegular,
+  CheckmarkCircleRegular,
+  ErrorCircleRegular,
 } from "@fluentui/react-icons";
 import { CATEGORIES } from "../../utils/types";
 
@@ -71,6 +73,8 @@ interface IndexManagementPaneProps {
   isIndexingImages: boolean;
   isRemovingModule: boolean;
   isImageIndexModuleInstalled: boolean;
+  cloudSyncStatus: "idle" | "syncing" | "done" | "error";
+  cloudSyncMessage: string | null;
   onSync: () => void;
   onAddExtraPath: () => void;
   onRemoveExtraPath: (path: string) => void;
@@ -91,6 +95,8 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
   isIndexingImages,
   isRemovingModule,
   isImageIndexModuleInstalled,
+  cloudSyncStatus,
+  cloudSyncMessage,
   onSync,
   onAddExtraPath,
   onRemoveExtraPath,
@@ -144,6 +150,56 @@ export const IndexManagementPane: React.FC<IndexManagementPaneProps> = ({
           </Text>
         </div>
       </Card>
+
+      {/* Cloud sync status card */}
+      {cloudSyncStatus !== "idle" && (
+        <Card
+          style={{
+            backgroundColor: "rgba(255, 255, 255, 0.03)",
+            backdropFilter: "blur(4px)",
+            padding: "12px",
+            borderLeft: `4px solid ${
+              cloudSyncStatus === "syncing"
+                ? tokens.colorBrandBackground
+                : cloudSyncStatus === "done"
+                ? tokens.colorPaletteGreenBorder2
+                : tokens.colorPaletteRedBorder2
+            }`,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            {cloudSyncStatus === "syncing" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <Spinner size="tiny" />
+                <Text weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
+                  正在同步到云端...
+                </Text>
+              </div>
+            )}
+            {cloudSyncStatus === "done" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <CheckmarkCircleRegular style={{ color: tokens.colorPaletteGreenForeground2 }} />
+                <Text weight="semibold" style={{ color: tokens.colorPaletteGreenForeground2 }}>
+                  云端同步完成
+                </Text>
+              </div>
+            )}
+            {cloudSyncStatus === "error" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ErrorCircleRegular style={{ color: tokens.colorPaletteRedForeground2 }} />
+                <Text weight="semibold" style={{ color: tokens.colorPaletteRedForeground2 }}>
+                  云端同步失败
+                </Text>
+              </div>
+            )}
+            {cloudSyncMessage && (
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                {cloudSyncMessage}
+              </Text>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Divider />
 
