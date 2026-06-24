@@ -58,10 +58,7 @@ body {
 .fui-Combobox,
 .fui-Combobox__input,
 .fui-Dropdown,
-.fui-Listbox,
-.fui-Option,
-.fui-Button:not(.fui-Button--primary),
-.fui-MenuPopover {
+.fui-Button:not(.fui-Button--primary) {
   background-color: rgba(255, 255, 255, 0.05) !important;
   backdrop-filter: blur(4px);
 }
@@ -99,8 +96,6 @@ body {
 [data-theme="dark"] .fui-Combobox,
 [data-theme="dark"] .fui-Combobox__input,
 [data-theme="dark"] .fui-Dropdown,
-[data-theme="dark"] .fui-Listbox,
-[data-theme="dark"] .fui-Option,
 [data-theme="dark"] .fui-Button:not(.fui-Button--primary),
 [data-theme="dark"] .card-actions-area {
   background-color: rgba(255, 255, 255, 0.06) !important;
@@ -220,4 +215,51 @@ code {
 .hero-graphic-cube-purple {
   animation: floatSlow 5s ease-in-out infinite;
   transform-origin: center center;
+}
+
+/* Dropdown list, menu list, and popup menu container styles for better readability (acrylic overlay style) */
+.fui-Listbox,
+.fui-MenuPopover {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.fui-Option {
+  background-color: transparent !important;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.fui-Option:hover,
+.fui-Option--active {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.fui-Option--selected,
+.fui-Option[aria-selected="true"] {
+  background-color: rgba(0, 0, 0, 0.09) !important;
+}
+
+/* Dark theme specific dropdown list and popup menu styles */
+[data-theme="dark"] .fui-Listbox,
+[data-theme="dark"] .fui-MenuPopover {
+  background-color: rgba(36, 36, 36, 0.9) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .fui-Option {
+  background-color: transparent !important;
+}
+
+[data-theme="dark"] .fui-Option:hover,
+[data-theme="dark"] .fui-Option--active {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .fui-Option--selected,
+[data-theme="dark"] .fui-Option[aria-selected="true"] {
+  background-color: rgba(255, 255, 255, 0.14) !important;
 }
