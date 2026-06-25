@@ -896,7 +896,7 @@ export const IdSearchView: React.FC<IdSearchViewProps> = ({ onNavigate }) => {
         </>
       ) : cloudSyncStatus === "error" ? (
         <>
-          <ErrorCircleRegular style={{ fontSize: "48px", color: tokens.colorRedForeground1 }} />
+          <ErrorCircleRegular style={{ fontSize: "48px", color: tokens.colorPaletteRedForeground1 }} />
           <Text size={300} style={{ color: tokens.colorNeutralForeground3, textAlign: "center", maxWidth: "350px" }}>
             {cloudSyncMessage || "无法连接云端数据库，请检查网络或重建本地索引。"}
           </Text>
